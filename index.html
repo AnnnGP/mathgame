@@ -20,13 +20,16 @@
         const { useState, useEffect } = React;
 
         function MathGame() {
+            const getUrlPin = () => {
+                const params = new URLSearchParams(window.location.search);
+                return params.get('pin');
+            };
+
             const [mode, setMode] = useState('selectMode');
             const [gamePin, setGamePin] = useState(() => {
-                const saved = localStorage.getItem('mathgame_pin');
-                if (saved) return saved;
-                const newPin = Math.random().toString(36).substring(2, 8).toUpperCase();
-                localStorage.setItem('mathgame_pin', newPin);
-                return newPin;
+                const urlPin = getUrlPin();
+                if (urlPin) return urlPin;
+                return Math.random().toString(36).substring(2, 8).toUpperCase();
             });
             const [inputPin, setInputPin] = useState('');
             const [teams, setTeams] = useState([]);
@@ -107,6 +110,7 @@
                 setCurrentQuestion(generateQuestion());
                 setTimeLeft(20);
                 setShowResults(false);
+                window.history.pushState({}, '', `?pin=${gamePin}`);
                 setMode('profesorPlaying');
             };
 
