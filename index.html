@@ -4,137 +4,137 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MathGame - Competencia Matemática</title>
-    <!-- Librerías de React y Babel (necesario para compilar el JSX en el navegador) -->
+    <!-- Bibliotecas de React (versión de producción) -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Tailwind CSS para estilos -->
+    <!-- Tailwind CSS para el estilizado responsivo -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* Estilos base */
-        body { margin: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif; }
+        body { 
+            margin: 0; 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif; 
+            /* Asegura que el elemento raíz abarque la altura completa de la ventana */
+            min-height: 100vh;
+        }
+        #root {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
     </style>
 </head>
 <body>
     <div id="root"></div>
-    <script type="text/babel">
-        const { useState, useEffect } = React;
-        
-        // Componente principal del juego
+    
+    <!-- Script Principal de la Aplicación (JSX compilado a JavaScript estándar) -->
+    <script type="text/javascript">
+        // Desestructuración de hooks de React para código más limpio
+        const { useState, useEffect, useCallback, useMemo } = React;
+
+        /**
+         * Componente principal del juego MathGame.
+         * Maneja toda la lógica del estado, las vistas (Profesorado/Alumnado) y la interacción.
+         */
         function MathGame() {
-          const [mode, setMode] = useState('selectMode');
-          // Genera un PIN aleatorio
+          // --- ESTADOS PRINCIPALES ---
+          const [mode, setMode] = useState('selectMode'); // 'selectMode', 'profesorMenu', 'alumnoMenu', 'profesorPlaying', 'alumnoPlaying', 'resultados'
           const [gamePin, setGamePin] = useState(Math.random().toString(36).substring(2, 8).toUpperCase());
           const [inputPin, setInputPin] = useState('');
-          const [joinError, setJoinError] = useState(false); // Estado para error de PIN
+          const [joinError, setJoinError] = useState(false);
           
-          const [teams, setTeams] = useState([]);
+          const [teams, setTeams] = useState([]); // Array de objetos {id, name, score}
           const [numTeams, setNumTeams] = useState(2);
-          const [difficulty, setDifficulty] = useState('media');
+          const [difficulty, setDifficulty] = useState('media'); // 'facil', 'media', 'dificil'
           const [currentQuestion, setCurrentQuestion] = useState(null);
-          const [teamAnswers, setTeamAnswers] = {}; 
+          const [teamAnswers, setTeamAnswers] = useState({}); // {teamId: answer}
           const [showResults, setShowResults] = useState(false);
           const [questionNumber, setQuestionNumber] = useState(1);
           const [timeLeft, setTimeLeft] = useState(20);
           const [totalQuestions, setTotalQuestions] = useState(10);
-          const [teamId, setTeamId] = useState(null);
-          const [alumnoRespuesta, setAlumnoRespuesta] = useState(null);
+          
+          // Estados específicos del Alumnado
+          const [teamId, setTeamId] = useState(null); // ID del equipo al que pertenece el alumno
+          const [alumnoRespuesta, setAlumnoRespuesta] = useState(null); // Respuesta seleccionada por el alumno
 
-          // Lógica del temporizador
-          useEffect(() => {
-            if ((mode === 'profesorPlaying' || mode === 'alumnoPlaying') && !showResults && timeLeft > 0) {
-              const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
-              return () => clearTimeout(timer);
-            }
-            if (timeLeft === 0 && !showResults && (mode === 'profesorPlaying' || mode === 'alumnoPlaying')) {
-              setShowResults(true);
-            }
-          }, [timeLeft, mode, showResults]);
+          // --- LOGIC FUNCTIONS (useCallback for stability) ---
 
-          // --- Funciones de Generación de Preguntas ---
+          const generateQuestion = useCallback(() => {
+            const isCalculo = questionNumber % 2 === 1; // Alternar entre cálculo y lógica
+            const difficultyMap = {
+              facil: { maxVal: 20, maxMult: 10 },
+              media: { maxVal: 50, maxMult: 15 },
+              dificil: { maxVal: 100, maxMult: 20 }
+            };
+            const config = difficultyMap[difficulty];
 
-          const generateCalculoQuestion = () => {
-            let a, b, operation, answer;
-            const operations = ['+', '-', '×', '÷'];
-            const selectedOp = operations[Math.floor(Math.random() * operations.length)];
+            if (isCalculo) {
+              let a, b, answer;
+              const operations = ['+', '-', '×', '÷'];
+              const selectedOp = operations[Math.floor(Math.random() * operations.length)];
+              
+              // Base number generation
+              a = Math.floor(Math.random() * config.maxVal) + 1;
+              b = Math.floor(Math.random() * config.maxVal) + 1;
 
-            // Determinar rango de números según la dificultad
-            let maxVal;
-            if (difficulty === 'facil') maxVal = 20;
-            else if (difficulty === 'media') maxVal = 50;
-            else maxVal = 100;
-
-            a = Math.floor(Math.random() * maxVal) + 1;
-            b = Math.floor(Math.random() * maxVal) + 1;
-
-            if (selectedOp === '+') {
-              answer = a + b;
-            } else if (selectedOp === '-') {
-              // Asegurar resultado positivo
-              if (a < b) [a, b] = [b, a];
-              answer = a - b;
-            } else if (selectedOp === '×') {
-              // Reducir rango para multiplicación en dificultad fácil/media
-              if (difficulty !== 'dificil') {
-                  a = Math.floor(Math.random() * 10) + 1;
-                  b = Math.floor(Math.random() * 10) + 1;
+              if (selectedOp === '+') {
+                answer = a + b;
+              } else if (selectedOp === '-') {
+                if (a < b) [a, b] = [b, a];
+                answer = a - b;
+              } else if (selectedOp === '×') {
+                // Adjust numbers for multiplication to prevent excessively large results
+                a = Math.floor(Math.random() * config.maxMult) + 1;
+                b = Math.floor(Math.random() * config.maxMult) + 1;
+                answer = a * b;
+              } else { // Division '÷'
+                // Ensure integer result
+                let tempB = Math.floor(Math.random() * config.maxMult) + 1;
+                let tempResult = Math.floor(Math.random() * config.maxMult) + 1;
+                a = tempResult * tempB;
+                b = tempB;
+                answer = tempResult;
               }
-              answer = a * b;
-            } else { // División '÷'
-              // Asegurar que la división tenga resultado entero
-              b = b !== 0 ? b : 1;
-              answer = Math.floor(a / b);
-              a = answer * b;
-              if (a === 0 && b > 0) a = b; // Evitar 0/x=0 a menos que sea necesario
+              
+              // Generate options
+              const options = [answer];
+              while (options.length < 4) {
+                let offset = (Math.random() > 0.5 ? 1 : -1) * (Math.floor(Math.random() * 5) + 1);
+                let wrong = answer + offset;
+                if (!options.includes(wrong) && wrong >= 0) options.push(wrong);
+              }
+
+              return {
+                type: 'calculo',
+                question: `${a} ${selectedOp} ${b}`,
+                answer: answer,
+                options: options.sort(() => Math.random() - 0.5),
+                icon: '🧮'
+              };
+
+            } else { // Logic questions
+              const logicQuestions = [
+                { question: 'Si 2+2=5, 3+3=7, 4+4=?', answer: 9, options: [8, 9, 10, 11], hint: 'Se suma 1 extra.' },
+                { question: 'Un caracol sube 3m de día y baja 2m de noche. ¿Cuántos días tarda en subir 10m?', answer: 8, options: [8, 9, 10, 12], hint: 'Al final, sube los últimos metros sin bajar.' },
+                { question: 'Si tienes 5 peces y 3 se ahogan, ¿cuántos quedan?', answer: 5, options: [2, 3, 5, 8], hint: 'Los peces no se ahogan.' },
+                { question: '¿Qué número sigue: 1, 1, 2, 3, 5, 8, ?', answer: 13, options: [11, 12, 13, 15], hint: 'Secuencia de Fibonacci.' },
+                { question: 'El número que, si lo inviertes, vale menos es el...', answer: 9, options: [6, 8, 9, 11], hint: 'El 9 invertido es 6.' },
+                { question: '¿Cuántos cuartos de pastel hay en dos pasteles y medio?', answer: 10, options: [8, 9, 10, 12], hint: 'Cada pastel tiene cuatro cuartos.' }
+              ];
+              
+              const q = logicQuestions[Math.floor(Math.random() * logicQuestions.length)];
+              return {
+                type: 'logica',
+                ...q,
+                options: q.options.sort(() => Math.random() - 0.5),
+                icon: '🧩'
+              };
             }
+          }, [difficulty, questionNumber]);
 
-            // Generar opciones falsas
-            const options = [answer];
-            while (options.length < 4) {
-              // Generar una respuesta incorrecta cercana
-              let wrong = answer + (Math.random() > 0.5 ? 1 : -1) * (Math.floor(Math.random() * 5) + 1);
-              if (!options.includes(wrong) && wrong >= 0) options.push(wrong);
-            }
-
-            return {
-              type: 'calculo',
-              question: `${a} ${selectedOp} ${b}`,
-              answer: answer,
-              options: options.sort(() => Math.random() - 0.5),
-              icon: '🧮'
-            };
-          };
-
-          const generateLogicQuestion = () => {
-            const logicQuestions = [
-              { question: 'Si 2+2=5, 3+3=7, 4+4=?', answer: 9, options: [8, 9, 10, 11], hint: 'Mira el patrón: se suma 1 extra.' },
-              { question: 'Un caracol sube 3m de día y baja 2m de noche. ¿Cuántos días tarda en subir 10m?', answer: 8, options: [8, 9, 10, 12], hint: 'Al final, sube los últimos 3m en un día sin bajar.' },
-              { question: 'Si tienes 5 peces y 3 se ahogan, ¿cuántos quedan?', answer: 5, options: [2, 3, 5, 8], hint: 'Los peces no se ahogan.' },
-              { question: '¿Qué número sigue: 1, 1, 2, 3, 5, 8, ?', answer: 13, options: [11, 12, 13, 15], hint: 'Es la secuencia de Fibonacci.' },
-              { question: '¿Cuál es el número que, si lo inviertes, vale menos?', answer: 9, options: [6, 8, 9, 11], hint: 'El 9 invertido es 6.' },
-              { question: '¿Cuántos cuartos de pastel hay en dos pasteles y medio?', answer: 10, options: [8, 9, 10, 12], hint: 'Cada pastel tiene cuatro cuartos.' }
-            ];
-            
-            const q = logicQuestions[Math.floor(Math.random() * logicQuestions.length)];
-            return {
-              type: 'logica',
-              ...q,
-              options: q.options.sort(() => Math.random() - 0.5),
-              icon: '🧩'
-            };
-          };
-
-          const generateQuestion = () => {
-            // Alternar entre cálculo y lógica
-            const isCalculo = questionNumber % 2 === 1;
-            return isCalculo ? generateCalculoQuestion() : generateLogicQuestion();
-          };
-
-          // --- Lógica del Juego ---
-
-          // Iniciar el juego (Profesorado)
-          const initGameProfesor = () => {
-            const newTeams = Array(numTeams).fill(0).map((_, i) => ({
+          const initGameProfesor = useCallback(() => {
+            const newTeams = Array.from({ length: numTeams }, (_, i) => ({
               id: i,
               name: `Equipo ${i + 1}`,
               score: 0
@@ -146,39 +146,26 @@
             setTimeLeft(20);
             setShowResults(false);
             setMode('profesorPlaying');
-          };
+          }, [numTeams, generateQuestion]);
 
-          // Unirse al juego (Alumnado)
-          const unirAlEquipo = () => {
+          const unirAlEquipo = useCallback(() => {
             setJoinError(false);
             if (inputPin.toUpperCase() === gamePin) {
-              // Simulación: Asignar al Equipo 1 (0) para la demo
+              // En una aplicación real, aquí se asignaría el equipo de forma inteligente.
+              // Para esta demo, el alumno se asigna al Equipo 1 (ID 0) si el PIN es correcto.
               setTeamId(0); 
               setMode('alumnoPlaying');
             } else {
               setJoinError(true); 
               setInputPin('');
             }
-          };
+          }, [inputPin, gamePin]);
 
-          const handleAlumnoAnswer = (option) => {
-            setAlumnoRespuesta(option);
-          };
-
-          const enviarRespuesta = () => {
-            if (alumnoRespuesta !== null && teamId !== null) {
-              setTeamAnswers(prev => ({
-                ...prev,
-                [teamId]: alumnoRespuesta
-              }));
-              setAlumnoRespuesta(null);
-            }
-          };
-
-          const nextQuestion = () => {
+          const nextQuestion = useCallback(() => {
             if (questionNumber >= totalQuestions) {
               setMode('resultados');
             } else {
+              // Calculate and update scores
               const newTeams = teams.map(team => {
                 const teamAnswer = teamAnswers[team.id];
                 if (teamAnswer === currentQuestion?.answer) {
@@ -187,78 +174,111 @@
                 }
                 return team;
               });
+
               setTeams(newTeams);
               setTeamAnswers({});
               setQuestionNumber(questionNumber + 1);
-              setCurrentQuestion(generateQuestion());
+              setCurrentQuestion(generateQuestion()); // Generate next question
               setTimeLeft(20);
               setShowResults(false);
             }
-          };
+          }, [questionNumber, totalQuestions, teams, teamAnswers, currentQuestion, difficulty, generateQuestion]);
 
-          const salir = () => {
-            // Resetear todo el estado
+          const salir = useCallback(() => {
+            // Reset all game state
             setMode('selectMode');
             setTeams([]);
             setTeamAnswers({});
             setQuestionNumber(1);
             setTeamId(null);
             setAlumnoRespuesta(null);
-            // Generar un nuevo PIN para la siguiente sesión
+            // Generate new PIN for next session
             setGamePin(Math.random().toString(36).substring(2, 8).toUpperCase());
+          }, []);
+
+
+          // --- HANDLERS (for local updates) ---
+
+          const handleAlumnoAnswer = (option) => {
+            setAlumnoRespuesta(option);
           };
 
-          // Generación de QR (usando API externa)
-          const generateQRSvg = () => {
+          const enviarRespuesta = () => {
+            if (alumnoRespuesta !== null && teamId !== null) {
+              // Simular el envío de la respuesta al profesor (en una aplicación real, sería una actualización de base de datos/socket)
+              setTeamAnswers(prev => ({
+                ...prev,
+                [teamId]: alumnoRespuesta
+              }));
+              setAlumnoRespuesta(null);
+            }
+          };
+
+          // --- EFFECTS ---
+
+          // Lógica del temporizador
+          useEffect(() => {
+            if ((mode === 'profesorPlaying' || mode === 'alumnoPlaying') && !showResults && timeLeft > 0) {
+              const timer = setTimeout(() => setTimeLeft(prev => prev - 1), 1000);
+              return () => clearTimeout(timer);
+            }
+            if (timeLeft === 0 && !showResults && mode === 'profesorPlaying') {
+              setShowResults(true);
+            }
+          }, [timeLeft, mode, showResults]);
+
+          // --- UTILS (useMemo for optimization) ---
+
+          // Generar URL del Código QR
+          const qrUrl = useMemo(() => {
             const text = window.location.href;
             const encodedText = encodeURIComponent(text);
+            // Uso de una API QR confiable y gratuita
             return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodedText}`;
-          };
+          }, []);
 
-          // Descarga del QR
           const descargarQR = () => {
             const link = document.createElement('a');
-            link.href = generateQRSvg();
+            link.href = qrUrl;
             link.download = 'MathGame_QR.png';
             link.click();
           };
 
-          // --- Renderizado de Vistas ---
+          // --- RENDER VISTAS ---
 
-          // PANTALLA INICIAL (Select Mode)
+          // VISTA: PANTALLA INICIAL (Select Mode)
           if (mode === 'selectMode') {
             return (
-              <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
-                <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full">
-                  <h1 className="text-4xl font-bold text-center mb-2 text-gray-800">MathGame</h1>
-                  <p className="text-center text-gray-600 mb-8">¡Cálculo, lógica y acertijos! Todos juegan a la vez</p>
+              <div className="min-h-screen w-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
+                <div className="bg-white rounded-xl shadow-2xl p-6 sm:p-8 max-w-sm w-full transition-all duration-300">
+                  <h1 className="text-4xl font-extrabold text-center mb-2 text-gray-800">MathGame</h1>
+                  <p className="text-center text-gray-600 mb-8 text-sm">¡Competencia matemática en tiempo real!</p>
 
                   <div className="space-y-4 mb-8">
                     <button
                       onClick={() => setMode('profesorMenu')}
-                      className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-4 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition flex items-center justify-center gap-2"
+                      className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-4 px-4 rounded-xl font-bold text-lg shadow-lg hover:from-blue-600 hover:to-blue-700 transition transform hover:scale-[1.02]"
                     >
-                      📺 Profesorado
+                      <span className="text-2xl mr-2">👨‍🏫</span> Modo Profesorado
                     </button>
                     <button
                       onClick={() => setMode('alumnoMenu')}
-                      className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition flex items-center justify-center gap-2"
+                      className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 px-4 rounded-xl font-bold text-lg shadow-lg hover:from-green-600 hover:to-green-700 transition transform hover:scale-[1.02]"
                     >
-                      📱 Alumnado
+                      <span className="text-2xl mr-2">📱</span> Modo Alumnado
                     </button>
                   </div>
 
-                  <div className="border-t-2 border-gray-300 pt-6">
-                    <p className="text-center text-sm text-gray-600 mb-4">📱 QR para compartir con el alumnado</p>
+                  <div className="border-t border-gray-200 pt-6">
+                    <p className="text-center text-sm font-semibold text-gray-600 mb-4">Compartir partida (PIN: {gamePin})</p>
                     <div className="flex flex-col items-center gap-4">
-                      <img src={generateQRSvg()} alt="MathGame QR" className="w-32 h-32 border-2 border-gray-300 p-2 bg-white rounded" />
+                      <img src={qrUrl} alt="MathGame QR" className="w-28 h-28 border-4 border-gray-200 p-1 bg-white rounded-xl shadow-inner" />
                       <button
                         onClick={descargarQR}
-                        className="bg-gradient-to-r from-purple-500 to-purple-600 text-white py-2 px-4 rounded-lg font-semibold hover:shadow-lg transition flex items-center justify-center gap-2 text-sm"
+                        className="bg-purple-500 text-white py-2 px-4 rounded-lg font-semibold text-sm hover:bg-purple-600 transition"
                       >
                         ⬇️ Descargar QR
                       </button>
-                      <p className="text-xs text-gray-500 text-center">Guarda este QR para que el alumnado lo escanee</p>
                     </div>
                   </div>
                 </div>
@@ -266,234 +286,289 @@
             );
           }
 
-          // MENÚ PROFESORADO
+          // VISTA: MENÚ PROFESORADO
           if (mode === 'profesorMenu') {
             return (
-              <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
-                <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full">
-                  <h1 className="text-3xl font-bold text-center mb-6 text-gray-800">Configuración Profesorado</h1>
+              <div className="min-h-screen w-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
+                <div className="bg-white rounded-xl shadow-2xl p-6 sm:p-8 max-w-md w-full transition-all duration-300">
+                  <h1 className="text-3xl font-bold text-center mb-6 text-gray-800">Configuración</h1>
 
-                  <div className="bg-yellow-100 border-4 border-yellow-400 p-4 rounded-lg mb-6 text-center">
-                    <p className="text-sm text-gray-600">Código de sesión</p>
-                    <p className="text-4xl font-bold text-yellow-600">{gamePin}</p>
-                    <p className="text-xs text-gray-600 mt-2">Comparte este PIN con tu alumnado</p>
+                  <div className="bg-yellow-50 border-4 border-yellow-300 p-4 rounded-xl mb-6 text-center shadow-inner">
+                    <p className="text-sm font-semibold text-gray-600">PIN de Sesión</p>
+                    <p className="text-5xl font-extrabold text-yellow-600 tracking-widest">{gamePin}</p>
                   </div>
 
                   <div className="space-y-6">
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Número de equipos: {numTeams}</label>
-                      <input type="range" min="2" max="6" value={numTeams} onChange={(e) => setNumTeams(parseInt(e.target.value))} className="w-full h-2 bg-gray-300 rounded-lg" />
+                      <label className="block text-lg font-bold text-gray-700 mb-2">Equipos: {numTeams}</label>
+                      <input type="range" min="2" max="6" value={numTeams} onChange={(e) => setNumTeams(parseInt(e.target.value))} className="w-full h-3 bg-blue-100 rounded-lg appearance-none cursor-pointer range-lg" />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Dificultad:</label>
-                      <div className="space-y-2">
+                      <label className="block text-lg font-bold text-gray-700 mb-2">Dificultad:</label>
+                      <div className="grid grid-cols-3 gap-2">
                         {['facil', 'media', 'dificil'].map(level => (
-                          <button key={level} onClick={() => setDifficulty(level)} className={`w-full py-2 px-4 rounded-lg font-semibold transition ${difficulty === level ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}`}>
-                            {level === 'facil' ? 'Fácil' : level === 'media' ? 'Media' : 'Difícil'}
+                          <button key={level} onClick={() => setDifficulty(level)} className={`w-full py-3 px-4 rounded-lg font-semibold transition shadow-md ${difficulty === level ? 'bg-blue-600 text-white ring-2 ring-blue-800' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}`}>
+                            {level.charAt(0).toUpperCase() + level.slice(1)}
                           </button>
                         ))}
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Número de preguntas: {totalQuestions}</label>
-                      <input type="range" min="5" max="30" step="5" value={totalQuestions} onChange={(e) => setTotalQuestions(parseInt(e.target.value))} className="w-full h-2 bg-gray-300 rounded-lg" />
+                      <label className="block text-lg font-bold text-gray-700 mb-2">Preguntas: {totalQuestions}</label>
+                      <input type="range" min="5" max="30" step="5" value={totalQuestions} onChange={(e) => setTotalQuestions(parseInt(e.target.value))} className="w-full h-3 bg-purple-100 rounded-lg appearance-none cursor-pointer range-lg" />
                     </div>
 
-                    <button onClick={initGameProfesor} className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-3 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition">▶️ Comenzar Juego</button>
-                    <button onClick={salir} className="w-full bg-gray-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-gray-600 transition">Volver</button>
+                    <button onClick={initGameProfesor} className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 px-4 rounded-xl font-bold text-xl shadow-xl hover:from-green-600 hover:to-green-700 transition transform hover:scale-[1.01]">▶️ Iniciar Partida</button>
+                    <button onClick={() => setMode('selectMode')} className="w-full bg-gray-500 text-white py-3 px-4 rounded-xl font-semibold hover:bg-gray-600 transition">Volver</button>
                   </div>
                 </div>
               </div>
             );
           }
 
-          // MENÚ ALUMNADO
+          // VISTA: MENÚ ALUMNADO
           if (mode === 'alumnoMenu') {
             return (
-              <div className="min-h-screen bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center p-4">
-                <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full">
-                  <h1 className="text-3xl font-bold text-center mb-6 text-gray-800">Unirse a la partida</h1>
+              <div className="min-h-screen w-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center p-4">
+                <div className="bg-white rounded-xl shadow-2xl p-6 sm:p-8 max-w-sm w-full transition-all duration-300">
+                  <h1 className="text-3xl font-bold text-center mb-6 text-gray-800">Unirse a MathGame</h1>
 
                   <div className="space-y-6">
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Código PIN de la sesión:</label>
-                      <input type="text" value={inputPin} onChange={(e) => setInputPin(e.target.value.toUpperCase())} placeholder="Ej: ABC123" maxLength="6" className="w-full p-3 border-2 border-gray-300 rounded-lg text-center text-3xl font-bold tracking-widest" />
+                      <label className="block text-lg font-bold text-gray-700 mb-2">Introduce el PIN:</label>
+                      <input 
+                          type="text" 
+                          value={inputPin} 
+                          onChange={(e) => setInputPin(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} 
+                          placeholder="EJ: ABC123" 
+                          maxLength="6" 
+                          className="w-full p-4 border-4 border-green-300 rounded-xl text-center text-4xl font-extrabold tracking-widest transition focus:border-green-500 outline-none" 
+                      />
                     </div>
 
                     {joinError && (
-                      <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm font-semibold text-center">
-                        PIN incorrecto. Inténtalo de nuevo.
+                      <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm font-semibold text-center animate-pulse">
+                        ❌ PIN incorrecto. Revisa el código de {gamePin}
                       </div>
                     )}
 
-                    <button onClick={unirAlEquipo} className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-3 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition">▶️ Unirse</button>
-                    <button onClick={() => setMode('selectMode')} className="w-full bg-gray-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-gray-600 transition">Volver</button>
+                    <button onClick={unirAlEquipo} className="w-full bg-gradient-to-r from-green-500 to-teal-600 text-white py-4 px-4 rounded-xl font-bold text-xl shadow-xl hover:from-green-600 hover:to-teal-700 transition transform hover:scale-[1.01]">
+                        <span className="text-2xl mr-2">🚀</span> Entrar
+                    </button>
+                    <button onClick={() => setMode('selectMode')} className="w-full bg-gray-500 text-white py-3 px-4 rounded-xl font-semibold hover:bg-gray-600 transition">Volver</button>
                   </div>
                 </div>
               </div>
             );
           }
 
-          // PROFESORADO - JUGANDO
+          // VISTA: PROFESORADO - JUGANDO
           if (mode === 'profesorPlaying') {
-            const timeColor = timeLeft > 10 ? 'text-green-600' : timeLeft > 5 ? 'text-yellow-600' : 'text-red-600';
+            const timeColor = timeLeft > 10 ? 'text-green-400' : timeLeft > 5 ? 'text-yellow-400' : 'text-red-500';
             const isLogicQuestion = currentQuestion?.type === 'logica';
+            const pointsValue = difficulty === 'facil' ? 10 : difficulty === 'media' ? 20 : 30;
 
             return (
-              <div className="min-h-screen bg-gradient-to-br from-indigo-500 to-pink-500 flex items-center justify-center p-4">
-                <div className="bg-white rounded-lg shadow-2xl p-8 max-w-5xl w-full">
-                  <div className="flex justify-between items-center mb-6">
-                    <div className="text-center"><p className="text-sm font-semibold text-gray-600">Pregunta</p><p className="text-3xl font-bold text-purple-600">{questionNumber}/{totalQuestions}</p></div>
-                    <div className="text-center"><span className="text-3xl">{currentQuestion?.icon}</span><p className="text-sm font-semibold text-gray-600">{isLogicQuestion ? '🧩 Lógica' : '🧮 Cálculo'}</p></div>
-                    <div className={`text-center ${timeColor}`}><p className="text-4xl font-bold">{timeLeft}s</p></div>
+              <div className="min-h-screen w-full bg-gradient-to-br from-indigo-700 to-blue-900 flex items-center justify-center p-4">
+                <div className="bg-white rounded-xl shadow-2xl p-6 sm:p-8 max-w-6xl w-full transition-all duration-300">
+                  <div className="flex justify-between items-center mb-8 border-b-2 pb-4 border-gray-200">
+                    <div className="text-center flex-1"><p className="text-sm font-semibold text-gray-500">Pregunta</p><p className="text-4xl font-bold text-indigo-600">{questionNumber}/{totalQuestions}</p></div>
+                    <div className="text-center flex-1"><span className="text-4xl">{currentQuestion?.icon}</span><p className="text-sm font-semibold text-gray-500">{isLogicQuestion ? 'Lógica' : 'Cálculo'}</p></div>
+                    <div className={`text-center flex-1 transition duration-500 ${timeColor}`}><p className="text-5xl font-extrabold animate-pulse">{timeLeft}s</p></div>
                   </div>
 
-                  <div className={`rounded-lg p-8 mb-8 text-center border-4 ${isLogicQuestion ? 'bg-gradient-to-r from-purple-100 to-pink-100 border-purple-400' : 'bg-gradient-to-r from-yellow-100 to-yellow-50 border-yellow-400'}`}>
-                    <p className={`font-bold mb-4 ${isLogicQuestion ? 'text-2xl text-purple-800' : 'text-6xl text-gray-800'}`}>{currentQuestion?.question}</p>
-                    {isLogicQuestion && <p className="text-sm text-purple-600 italic">💡 {currentQuestion?.hint}</p>}
+                  <div className={`rounded-2xl p-8 sm:p-12 mb-8 text-center border-8 shadow-inner ${isLogicQuestion ? 'bg-gradient-to-r from-purple-100 to-pink-100 border-purple-400' : 'bg-gradient-to-r from-yellow-50 to-orange-50 border-yellow-400'}`}>
+                    <p className={`font-extrabold mb-4 ${isLogicQuestion ? 'text-3xl text-purple-800' : 'text-7xl text-gray-900'}`}>{currentQuestion?.question}</p>
+                    {isLogicQuestion && <p className="text-md text-purple-600 italic mt-4">💡 {currentQuestion?.hint}</p>}
+                    <p className="text-sm text-gray-500 mt-4 font-semibold">Valor: {pointsValue} puntos</p>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4 mb-8">
+                  {/* Opciones de respuesta (Solo mostradas, no interactivas) */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                     {currentQuestion?.options.map((option, idx) => (
-                      <button key={idx} disabled className={`text-white p-6 rounded-lg font-bold text-3xl opacity-75 ${isLogicQuestion ? 'bg-gradient-to-br from-purple-500 to-purple-600' : 'bg-gradient-to-br from-blue-500 to-blue-600'}`}>{option}</button>
+                      <div key={idx} className={`text-white p-4 sm:p-6 rounded-xl font-bold text-2xl text-center shadow-lg opacity-90 ${isLogicQuestion ? 'bg-gradient-to-br from-purple-500 to-purple-600' : 'bg-gradient-to-br from-blue-500 to-blue-600'}`}>
+                          <span className="text-xl mr-2">{(idx === 0 ? 'A' : idx === 1 ? 'B' : idx === 2 ? 'C' : 'D')}</span>
+                          {option}
+                      </div>
                     ))}
                   </div>
 
-                  <div className="grid gap-3 mb-6" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(150px, 1fr))` }}>
+                  <h2 className="text-2xl font-bold text-gray-700 mb-4 border-b-2 pb-2">Respuestas Recibidas</h2>
+                  <div className="grid gap-3 mb-6" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(140px, 1fr))` }}>
                     {teams.map(team => (
-                      <div key={team.id} className={`p-4 rounded-lg text-center font-bold transition ${teamAnswers[team.id] ? 'bg-blue-500 text-white scale-105 border-4 border-blue-700' : 'bg-gray-300 text-gray-800'}`}>
-                        <p className="text-sm mb-1">{team.name}</p>
-                        <p className="text-2xl">{teamAnswers[team.id] || '---'}</p>
+                      <div key={team.id} className={`p-4 rounded-xl text-center font-bold transition duration-300 shadow-md ${teamAnswers[team.id] ? 'bg-green-100 text-green-700 scale-105 border-4 border-green-300' : 'bg-gray-100 text-gray-600 border-2 border-gray-300'}`}>
+                        <p className="text-md mb-1">{team.name}</p>
+                        <p className="text-3xl">{teamAnswers[team.id] || '...'}</p>
                       </div>
                     ))}
                   </div>
 
                   {showResults && (
-                    <div className="mt-8 p-4 bg-gray-100 rounded-lg border-4 border-gray-400">
-                      <p className="text-center font-bold text-xl mb-4">✓ Respuesta correcta: {currentQuestion?.answer}</p>
+                    <div className="mt-8 p-6 bg-gray-50 rounded-2xl border-4 border-gray-300 shadow-xl">
+                      <p className="text-center font-extrabold text-3xl mb-6 text-green-700">✅ ¡Respuesta Correcta: {currentQuestion?.answer}!</p>
                       
-                      <div className="grid gap-2 mb-6" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(120px, 1fr))` }}>
+                      <div className="grid gap-2 mb-6" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(100px, 1fr))` }}>
                         {teams.map(team => {
                           const isCorrect = teamAnswers[team.id] === currentQuestion?.answer;
-                          const points = difficulty === 'facil' ? 10 : difficulty === 'media' ? 20 : 30;
+                          const icon = isCorrect ? '🎉' : '😔';
                           return (
-                            <div key={team.id} className={`p-2 rounded text-center font-bold ${isCorrect ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
+                            <div key={team.id} className={`p-3 rounded-lg text-center font-bold shadow-md ${isCorrect ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
                               <p className="text-sm">{team.name}</p>
-                              <p className="text-lg">{isCorrect ? `✓ +${points}` : '✗'}</p>
+                              <p className="text-xl">{icon}</p>
+                              <p className="text-xs mt-1">{isCorrect ? `+${pointsValue} pts` : 'No suma'}</p>
                             </div>
                           );
                         })}
                       </div>
 
-                      <div className="mb-6 p-4 bg-white rounded-lg border-2 border-gray-300">
-                        <p className="text-center font-bold text-gray-600 mb-3">PUNTUACIÓN ACTUAL</p>
+                      <div className="mb-6 p-4 bg-white rounded-lg border-2 border-indigo-300 shadow-md">
+                        <p className="text-center font-bold text-gray-600 mb-3 text-xl">🏆 Clasificación Actual</p>
                         <div className="space-y-2">
                           {[...teams].sort((a, b) => b.score - a.score).map((team, idx) => (
-                            <div key={team.id} className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-blue-50 to-purple-50 rounded">
-                              <span className="font-bold">{idx + 1}. {team.name}</span>
-                              <span className="text-lg font-bold text-blue-600">{team.score} pts</span>
+                            <div key={team.id} className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg font-semibold">
+                              <span className="font-extrabold text-indigo-700">{idx + 1}. {team.name}</span>
+                              <span className="text-xl font-bold text-blue-600">{team.score} pts</span>
                             </div>
                           ))}
                         </div>
                       </div>
 
-                      <button onClick={nextQuestion} className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-3 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition">Siguiente Pregunta →</button>
+                      <button onClick={nextQuestion} className="w-full bg-gradient-to-r from-green-500 to-teal-600 text-white py-4 px-4 rounded-xl font-bold text-xl shadow-xl hover:from-green-600 hover:to-teal-700 transition transform hover:scale-[1.01]">
+                        {questionNumber < totalQuestions ? 'Siguiente Pregunta →' : 'Finalizar Juego 🏁'}
+                      </button>
+                    </div>
+                  )}
+                  <button onClick={salir} className="mt-4 w-full bg-red-600 text-white py-3 px-4 rounded-xl font-semibold hover:bg-red-700 transition">Salir de la Sesión</button>
+                </div>
+              </div>
+            );
+          }
+
+          // VISTA: ALUMNADO - JUGANDO
+          if (mode === 'alumnoPlaying') {
+            const isLogicQuestion = currentQuestion?.type === 'logica';
+            const buttonClass = isLogicQuestion ? 'bg-gradient-to-br from-purple-500 to-purple-600' : 'bg-gradient-to-br from-blue-500 to-blue-600';
+            const buttonHoverClass = isLogicQuestion ? 'hover:from-purple-600 hover:to-purple-700' : 'hover:from-blue-600 hover:to-blue-700';
+            const isAnswerSent = teamAnswers[teamId] !== undefined && teamAnswers[teamId] !== null;
+
+            return (
+              <div className="min-h-screen w-full bg-gradient-to-br from-green-600 to-teal-800 flex items-center justify-center p-4">
+                <div className="bg-white rounded-xl shadow-2xl p-6 sm:p-8 max-w-lg w-full transition-all duration-300">
+                  <div className="flex justify-between items-center mb-6 border-b-2 pb-4 border-gray-200">
+                    <div className="text-center flex-1"><p className="text-sm font-semibold text-gray-500">Equipo {teamId + 1}</p><p className="text-3xl font-bold text-green-600">{gamePin}</p></div>
+                    <div className="text-center flex-1"><span className="text-3xl">{currentQuestion?.icon}</span><p className="text-sm font-semibold text-gray-500">P. {questionNumber}/{totalQuestions}</p></div>
+                    <div className="text-center flex-1"><p className="text-3xl font-bold text-red-600 animate-pulse">{timeLeft}s</p></div>
+                  </div>
+
+                  <div className={`rounded-2xl p-6 sm:p-8 mb-8 text-center border-4 shadow-inner ${isLogicQuestion ? 'bg-gradient-to-r from-purple-50 to-pink-50 border-purple-300' : 'bg-gradient-to-r from-blue-50 to-cyan-50 border-blue-300'}`}>
+                    <p className={`font-extrabold mb-4 ${isLogicQuestion ? 'text-2xl text-purple-800' : 'text-5xl text-gray-900'}`}>{currentQuestion?.question}</p>
+                    {isLogicQuestion && <p className="text-sm text-purple-600 italic mt-2">💡 {currentQuestion?.hint}</p>}
+                  </div>
+
+                  {isAnswerSent ? (
+                    <div className="p-6 bg-yellow-100 border-4 border-yellow-400 rounded-xl text-center">
+                        <p className="text-2xl font-bold text-yellow-800">✅ Respuesta Enviada</p>
+                        <p className="text-lg text-yellow-700 mt-2">Esperando al profesor...</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4 mb-6">
+                      {currentQuestion?.options.map((option, idx) => (
+                        <button 
+                            key={idx} 
+                            onClick={() => handleAlumnoAnswer(option)} 
+                            disabled={timeLeft === 0}
+                            className={`text-white p-6 rounded-xl font-bold text-3xl transition transform shadow-lg ${buttonClass} ${buttonHoverClass} ${alumnoRespuesta === option ? 'ring-4 ring-white scale-[1.05] ring-offset-4 ring-offset-green-600' : 'hover:scale-[1.03]'}`}
+                        >
+                            {option}
+                        </button>
+                      ))}
                     </div>
                   )}
 
-                  <button onClick={salir} className="mt-4 w-full bg-red-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-red-600 transition">Salir</button>
-                </div>
-              </div>
-            );
-          }
-
-          // ALUMNADO - JUGANDO
-          if (mode === 'alumnoPlaying') {
-            const isLogicQuestion = currentQuestion?.type === 'logica';
-
-            return (
-              <div className="min-h-screen bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center p-4">
-                <div className="bg-white rounded-lg shadow-2xl p-8 max-w-2xl w-full">
-                  <div className="flex justify-between items-center mb-6">
-                    <div className="text-center flex-1"><p className="text-sm font-semibold text-gray-600">Pregunta</p><p className="text-3xl font-bold text-green-600">{questionNumber}/{totalQuestions}</p></div>
-                    <div className="text-center flex-1"><span className="text-3xl">{currentQuestion?.icon}</span><p className="text-sm font-semibold text-gray-600">{isLogicQuestion ? '🧩 Lógica' : '🧮 Cálculo'}</p></div>
-                    <div className="text-center flex-1"><p className="text-3xl font-bold text-red-600">{timeLeft}s</p></div>
-                  </div>
-
-                  <div className={`rounded-lg p-8 mb-8 text-center border-4 ${isLogicQuestion ? 'bg-gradient-to-r from-purple-100 to-pink-100 border-purple-400' : 'bg-gradient-to-r from-yellow-100 to-yellow-50 border-yellow-400'}`}>
-                    <p className={`font-bold mb-4 ${isLogicQuestion ? 'text-2xl text-purple-800' : 'text-5xl text-gray-800'}`}>{currentQuestion?.question}</p>
-                    {isLogicQuestion && <p className="text-sm text-purple-600 italic">💡 {currentQuestion?.hint}</p>}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4 mb-6">
-                    {currentQuestion?.options.map((option, idx) => (
-                      <button key={idx} onClick={() => handleAlumnoAnswer(option)} className={`text-white p-6 rounded-lg font-bold text-3xl transition transform hover:scale-105 ${alumnoRespuesta === option ? 'ring-4 ring-white scale-110 ' + (isLogicQuestion ? 'bg-gradient-to-br from-purple-600 to-purple-700' : 'bg-gradient-to-br from-blue-600 to-blue-700') : isLogicQuestion ? 'bg-gradient-to-br from-purple-500 to-purple-600' : 'bg-gradient-to-br from-blue-500 to-blue-600'}`}>{option}</button>
-                    ))}
-                  </div>
-
-                  {alumnoRespuesta !== null ? (
-                    <button onClick={enviarRespuesta} className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition">✓ Enviar Respuesta</button>
-                  ) : (
-                    <div className="w-full bg-gray-300 text-gray-700 py-4 px-4 rounded-lg font-bold text-lg text-center">Selecciona una respuesta</div>
+                  {!isAnswerSent && alumnoRespuesta !== null && timeLeft > 0 && (
+                    <button onClick={enviarRespuesta} className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 px-4 rounded-xl font-bold text-xl shadow-xl transition transform hover:scale-[1.01]">
+                      ✓ Confirmar Respuesta
+                    </button>
                   )}
+                  {timeLeft === 0 && (
+                      <div className="w-full bg-red-100 text-red-700 py-4 px-4 rounded-xl font-bold text-xl text-center border-2 border-red-500">¡Tiempo agotado! ⏳</div>
+                  )}
+                  <button onClick={salir} className="mt-4 w-full bg-gray-500 text-white py-3 px-4 rounded-xl font-semibold hover:bg-gray-600 transition">Salir</button>
                 </div>
               </div>
             );
           }
 
-          // RESULTADOS
+          // VISTA: RESULTADOS
           if (mode === 'resultados') {
-            const sortedTeams = [...teams].sort((a, b) => b.score - a.score);
+            const sortedTeams = useMemo(() => 
+                [...teams].sort((a, b) => b.score - a.score)
+            , [teams]);
+
+            const getMedal = (idx) => {
+                if (idx === 0) return '🥇';
+                if (idx === 1) return '🥈';
+                if (idx === 2) return '🥉';
+                return '🏅';
+            };
 
             return (
-              <div className="min-h-screen bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center p-4">
-                <div className="bg-white rounded-lg shadow-2xl p-8 max-w-2xl w-full">
+              <div className="min-h-screen w-full bg-gradient-to-br from-yellow-500 to-orange-700 flex items-center justify-center p-4">
+                <div className="bg-white rounded-xl shadow-2xl p-6 sm:p-10 max-w-lg w-full transition-all duration-300">
                   <div className="text-center mb-8">
-                    <h1 className="text-4xl font-bold text-gray-800">¡RESULTADOS FINALES!</h1>
+                    <h1 className="text-5xl font-extrabold text-gray-800 animate-bounce">¡RESULTADOS FINALES!</h1>
+                    <p className="text-xl text-orange-600 mt-2">Felicidades al equipo ganador</p>
                   </div>
 
                   <div className="space-y-4 mb-8">
                     {sortedTeams.map((team, idx) => (
-                      <div key={team.id} className={`p-4 rounded-lg flex items-center justify-between font-bold text-lg ${idx === 0 ? 'bg-yellow-100 border-4 border-yellow-400' : idx === 1 ? 'bg-gray-100 border-4 border-gray-400' : 'bg-orange-100 border-4 border-orange-400'}`}>
-                        <span>{idx + 1}º - {team.name}</span>
-                        <span className="text-2xl">{team.score} PUNTOS</span>
+                      <div key={team.id} className={`p-4 rounded-xl flex items-center justify-between font-extrabold text-2xl shadow-lg transition transform hover:scale-[1.02] ${idx === 0 ? 'bg-yellow-100 border-4 border-yellow-500' : idx === 1 ? 'bg-gray-200 border-4 border-gray-400' : idx === 2 ? 'bg-orange-200 border-4 border-orange-400' : 'bg-gray-50 border-2 border-gray-300'}`}>
+                        <span>{getMedal(idx)} {team.name}</span>
+                        <span className="text-3xl text-indigo-700">{team.score} pts</span>
                       </div>
                     ))}
                   </div>
 
-                  <button onClick={salir} className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition">Volver al inicio</button>
+                  <button onClick={salir} className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-4 px-4 rounded-xl font-bold text-xl shadow-xl hover:from-blue-600 hover:to-purple-700 transition transform hover:scale-[1.01]">
+                      Volver al Inicio
+                  </button>
                 </div>
               </div>
             );
           }
         }
         
-        // Función de Renderizado con diagnóstico básico
+        // --- RENDERIZADO DE LA APLICACIÓN ---
+        
+        // Función de Renderizado con manejo de errores básico
         function AppWrapper() {
-            // Este es un punto de inicio para la depuración
             try {
-                return <MathGame />;
+                // Devolver el componente principal
+                return React.createElement(MathGame, null);
             } catch (error) {
-                console.error("--- ERROR CRÍTICO EN LA APLICACIÓN ---");
-                console.error("El error se produjo durante el renderizado. Revisa los detalles:", error);
+                // Registrar y mostrar error crítico si el componente React falla al renderizar
+                console.error("--- ERROR CRÍTICO EN LA APLICACIÓN ---", error);
                 
-                // Mostrar un mensaje de error visible en la pantalla
-                return (
-                    <div className="min-h-screen bg-red-100 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full text-center">
-                            <h2 className="text-3xl font-bold text-red-600 mb-4">🚨 Error de Aplicación 🚨</h2>
-                            <p className="text-gray-700 mb-4">La aplicación no se pudo iniciar. Por favor, revisa la consola del navegador (F12) para ver los detalles del error e infórmame.</p>
-                            <button onClick={() => window.location.reload()} className="mt-4 bg-red-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-red-600 transition">Recargar Página</button>
-                        </div>
-                    </div>
+                return React.createElement('div', { className: 'min-h-screen bg-red-800 flex items-center justify-center p-4' },
+                    React.createElement('div', { className: 'bg-white rounded-xl shadow-xl p-8 max-w-md w-full text-center' },
+                        React.createElement('h2', { className: 'text-3xl font-bold text-red-600 mb-4' }, '🚨 ¡Error Crítico! 🚨'),
+                        React.createElement('p', { className: 'text-gray-700 mb-6' }, 'La aplicación no se pudo iniciar. Asegúrate de tener conexión a Internet para cargar React, y haber reemplazado todo el código.'),
+                        React.createElement('button', { onClick: () => window.location.reload(), className: 'mt-4 bg-red-600 text-white py-3 px-6 rounded-xl font-semibold hover:bg-red-700 transition' }, 'Intentar Recargar')
+                    )
                 );
             }
         }
 
-        // Renderizar la aplicación en el DOM
-        ReactDOM.createRoot(document.getElementById('root')).render(<AppWrapper />);
+        // Inicializar y renderizar la aplicación en el DOM
+        const rootElement = document.getElementById('root');
+        if (rootElement) {
+            // Usar createRoot para React 18
+            ReactDOM.createRoot(rootElement).render(React.createElement(AppWrapper, null));
+        } else {
+            console.error("No se encontró el elemento con id 'root'. Renderizado fallido.");
+        }
     </script>
 </body>
 </html>
