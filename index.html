@@ -14,69 +14,76 @@
 <body>
     <div id="root"></div>
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useCallback } = React;
         
+        // Genera un PIN aleatorio de 6 caracteres
+        const generatePin = () => Math.random().toString(36).substring(2, 8).toUpperCase();
+
         function MathGame() {
           const [mode, setMode] = useState('selectMode');
-          const [gamePin, setGamePin] = useState(Math.random().toString(36).substring(2, 8).toUpperCase());
+          const [gamePin, setGamePin] = useState(generatePin());
           const [inputPin, setInputPin] = useState('');
-          const [equipoNombre, setEquipoNombre] = useState('');
           
           const [teams, setTeams] = useState([]);
           const [numTeams, setNumTeams] = useState(2);
           const [difficulty, setDifficulty] = useState('media');
+          const [totalQuestions, setTotalQuestions] = useState(10);
+
           const [currentQuestion, setCurrentQuestion] = useState(null);
-          const [teamAnswers, setTeamAnswers] = useState({});
+          const [teamAnswers, setTeamAnswers] = useState({}); // Respuestas para el profesor
           const [showResults, setShowResults] = useState(false);
           const [questionNumber, setQuestionNumber] = useState(1);
           const [timeLeft, setTimeLeft] = useState(20);
-          const [totalQuestions, setTotalQuestions] = useState(10);
+
+          // Estado del alumno (solo para simulación local)
           const [teamId, setTeamId] = useState(null);
           const [alumnoRespuesta, setAlumnoRespuesta] = useState(null);
+          const [respuestaEnviada, setRespuestaEnviada] = useState(false);
 
+          // Lógica del temporizador
           useEffect(() => {
             if ((mode === 'profesorPlaying' || mode === 'alumnoPlaying') && !showResults && timeLeft > 0) {
               const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
               return () => clearTimeout(timer);
             }
-            if (timeLeft === 0 && !showResults && (mode === 'profesorPlaying' || mode === 'alumnoPlaying')) {
+            if (timeLeft === 0 && !showResults && mode === 'profesorPlaying') {
+              // Profesor muestra resultados al terminar el tiempo
               setShowResults(true);
             }
           }, [timeLeft, mode, showResults]);
 
-          const generateCalculoQuestion = () => {
-            let a, b, operation, answer;
+          // Generación de Preguntas de Cálculo
+          const generateCalculoQuestion = useCallback(() => {
+            let a, b, answer;
             const operations = ['+', '-', '×', '÷'];
             const selectedOp = operations[Math.floor(Math.random() * operations.length)];
+            let maxVal;
 
-            if (difficulty === 'facil') {
-              a = Math.floor(Math.random() * 20) + 1;
-              b = Math.floor(Math.random() * 20) + 1;
-            } else if (difficulty === 'media') {
-              a = Math.floor(Math.random() * 50) + 1;
-              b = Math.floor(Math.random() * 50) + 1;
-            } else {
-              a = Math.floor(Math.random() * 100) + 1;
-              b = Math.floor(Math.random() * 100) + 1;
-            }
+            if (difficulty === 'facil') maxVal = 20;
+            else if (difficulty === 'media') maxVal = 50;
+            else maxVal = 100;
+
+            a = Math.floor(Math.random() * maxVal) + 1;
+            b = Math.floor(Math.random() * maxVal) + 1;
 
             if (selectedOp === '+') {
               answer = a + b;
             } else if (selectedOp === '-') {
-              answer = Math.abs(a - b);
-              if (a < b) [a, b] = [b, a];
+              if (a < b) [a, b] = [b, a]; // Asegura resultado positivo
+              answer = a - b;
             } else if (selectedOp === '×') {
+              if (difficulty === 'facil') b = Math.floor(Math.random() * 10) + 1;
               answer = a * b;
-            } else {
-              b = b !== 0 ? b : 1;
+            } else { // '÷'
+              b = b !== 0 ? Math.floor(Math.random() * 10) + 1 : 1;
               answer = Math.floor(a / b);
-              a = answer * b + Math.floor(Math.random() * b);
+              a = answer * b; // Ajusta 'a' para que la división sea exacta
             }
 
             const options = [answer];
             while (options.length < 4) {
-              const wrong = answer + (Math.random() > 0.5 ? 1 : -1) * (Math.floor(Math.random() * 10) + 1);
-              if (!options.includes(wrong) && wrong > 0) options.push(wrong);
+              const wrong = answer + (Math.random() > 0.5 ? 1 : -1) * (Math.floor(Math.random() * (maxVal < 20 ? 5 : 10)) + 1);
+              if (!options.includes(wrong) && wrong >= 0) options.push(wrong);
             }
 
             return {
@@ -86,61 +93,58 @@
               options: options.sort(() => Math.random() - 0.5),
               icon: '🧮'
             };
-          };
+          }, [difficulty]);
 
-          const generateLogicQuestion = () => {
+          // Generación de Preguntas de Lógica
+          const generateLogicQuestion = useCallback(() => {
             const logicQuestions = [
               {
                 question: 'Si 2+2=5, 3+3=7, 4+4=?',
-                answer: 9,
-                options: [8, 9, 10, 11],
-                hint: 'Mira el patrón'
+                answer: 9, options: [8, 9, 10, 11], hint: 'La respuesta es el doble +1'
               },
               {
                 question: 'Un caracol sube 3m de día y baja 2m de noche. ¿Cuántos días tarda en subir 10m?',
-                answer: 8,
-                options: [8, 9, 10, 12],
-                hint: 'Piensa en el último día'
+                answer: 8, options: [8, 9, 10, 12], hint: 'Piensa en el último día: al comienzo del día 8 estará en 7m, ese día sube 3m.'
               },
               {
                 question: '¿Cuántas veces cabe el número 1 en el número 11?',
-                answer: 2,
-                options: [1, 2, 3, 11],
-                hint: 'Cuenta con cuidado'
+                answer: 2, options: [1, 2, 3, 11], hint: 'Contando los dígitos: uno y uno.'
               },
               {
                 question: 'Si un cuadrado tiene 4 lados, ¿cuántos lados tiene el ángulo de un cuadrado?',
-                answer: 0,
-                options: [0, 1, 2, 4],
-                hint: 'Un ángulo no es una forma'
+                answer: 0, options: [0, 1, 2, 4], hint: 'Un ángulo no es una forma geométrica con lados.'
               },
               {
                 question: 'Juan tiene 5 manzanas. Da 2 a María. ¿Cuántas le quedan?',
-                answer: 3,
-                options: [1, 2, 3, 5],
-                hint: 'Resta simple'
+                answer: 3, options: [1, 2, 3, 5], hint: 'Resta simple: 5-2.'
               },
               {
                 question: '¿Cuál es el siguiente número? 2, 4, 8, 16, ?',
-                answer: 32,
-                options: [24, 28, 32, 64],
-                hint: 'Se multiplica por 2'
+                answer: 32, options: [24, 28, 32, 64], hint: 'Se multiplica por 2 (serie geométrica).'
               }
             ];
             
             const q = logicQuestions[Math.floor(Math.random() * logicQuestions.length)];
+            const options = [...q.options].sort(() => Math.random() - 0.5);
             return {
               type: 'logica',
-              ...q,
+              question: q.question,
+              answer: q.answer,
+              options: options,
+              hint: q.hint,
               icon: '🧩'
             };
-          };
+          }, []);
 
-          const generateQuestion = () => {
-            const isCalculo = questionNumber % 2 === 1;
+          // Función para generar la pregunta actual (alternando Lógica y Cálculo)
+          const generateQuestion = useCallback(() => {
+            // Alterna entre cálculo (impar) y lógica (par)
+            const isCalculo = questionNumber % 2 !== 0; 
             return isCalculo ? generateCalculoQuestion() : generateLogicQuestion();
-          };
+          }, [questionNumber, generateCalculoQuestion, generateLogicQuestion]);
 
+
+          // Iniciar Juego (Profesor)
           const initGameProfesor = () => {
             const newTeams = Array(numTeams).fill(0).map((_, i) => ({
               id: i,
@@ -156,51 +160,68 @@
             setMode('profesorPlaying');
           };
 
+          // Alumno se une (Simulación local: siempre al Equipo 1)
           const unirAlEquipo = () => {
             if (inputPin.toUpperCase() === gamePin) {
-              setTeamId(0);
+              // En un juego real, esto requeriría un servidor para asignar un ID de equipo real
+              setTeamId(0); 
               setMode('alumnoPlaying');
+              setRespuestaEnviada(false); // Reiniciar estado
+              setAlumnoRespuesta(null);
             } else {
-              alert('PIN incorrecto');
+              alert('PIN incorrecto. Asegúrate de que el Profesor haya iniciado la partida.');
               setInputPin('');
             }
           };
 
+          // Alumno selecciona respuesta
           const handleAlumnoAnswer = (option) => {
-            setAlumnoRespuesta(option);
-          };
-
-          const enviarRespuesta = () => {
-            if (alumnoRespuesta !== null) {
-              setTeamAnswers(prev => ({
-                ...prev,
-                [teamId]: alumnoRespuesta
-              }));
-              setAlumnoRespuesta(null);
+            if (!respuestaEnviada) {
+              setAlumnoRespuesta(option);
             }
           };
 
+          // Alumno envía respuesta
+          const enviarRespuesta = () => {
+            if (alumnoRespuesta !== null && !respuestaEnviada) {
+              // *** SIMULACIÓN: ENVÍA RESPUESTA DEL ALUMNO AL ESTADO DEL PROFESOR ***
+              // En un juego real, esto sería una llamada al servidor.
+              setTeamAnswers(prev => ({
+                ...prev,
+                [teamId]: alumnoRespuesta // Guardamos la respuesta del alumno local
+              }));
+              setRespuestaEnviada(true);
+            }
+          };
+
+          // Siguiente pregunta (Profesor)
           const nextQuestion = () => {
+            // 1. Calcular puntos
+            const newTeams = teams.map(team => {
+              const teamAnswer = teamAnswers[team.id];
+              if (teamAnswer === currentQuestion.answer) {
+                const points = difficulty === 'facil' ? 10 : difficulty === 'media' ? 20 : 30;
+                return { ...team, score: team.score + points };
+              }
+              return team;
+            });
+            setTeams(newTeams);
+
+            // 2. Transición
             if (questionNumber >= totalQuestions) {
               setMode('resultados');
             } else {
-              const newTeams = teams.map(team => {
-                const teamAnswer = teamAnswers[team.id];
-                if (teamAnswer === currentQuestion.answer) {
-                  const points = difficulty === 'facil' ? 10 : difficulty === 'media' ? 20 : 30;
-                  return { ...team, score: team.score + points };
-                }
-                return team;
-              });
-              setTeams(newTeams);
-              setTeamAnswers({});
+              setTeamAnswers({}); // Resetear respuestas
               setQuestionNumber(questionNumber + 1);
               setCurrentQuestion(generateQuestion());
               setTimeLeft(20);
               setShowResults(false);
+              setRespuestaEnviada(false); // Resetear estado del alumno local
+              setAlumnoRespuesta(null); // Resetear respuesta del alumno local
             }
           };
 
+          // Salir y resetear
           const salir = () => {
             setMode('selectMode');
             setTeams([]);
@@ -208,56 +229,60 @@
             setQuestionNumber(1);
             setTeamId(null);
             setAlumnoRespuesta(null);
-            setGamePin(Math.random().toString(36).substring(2, 8).toUpperCase());
+            setRespuestaEnviada(false);
+            setGamePin(generatePin()); // Nuevo PIN para la siguiente sesión
           };
 
-          const generateQRSvg = () => {
-            const text = window.location.href;
-            const encodedText = encodeURIComponent(text);
+          // Generar QR (solo para compartir la URL base)
+          const generateQRSvg = (pin) => {
+            const url = pin ? `${window.location.href}?pin=${pin}` : window.location.href;
+            const encodedText = encodeURIComponent(url);
             return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodedText}`;
           };
 
+          // Descargar QR
           const descargarQR = () => {
             const link = document.createElement('a');
-            link.href = generateQRSvg();
-            link.download = 'MathGame_QR.png';
+            link.href = generateQRSvg(gamePin);
+            link.download = 'MathGame_PIN_QR.png';
             link.click();
           };
+
+          // --- VISTAS ---
 
           // PANTALLA INICIAL
           if (mode === 'selectMode') {
             return (
               <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
                 <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full">
-                  <h1 className="text-4xl font-bold text-center mb-2 text-gray-800">MathGame</h1>
-                  <p className="text-center text-gray-600 mb-8">¡Cálculo, lógica y acertijos! Todos juegan a la vez</p>
+                  <h1 className="text-4xl font-extrabold text-center mb-2 text-gray-800">🧠 MathGame</h1>
+                  <p className="text-center text-gray-600 mb-8">¡Cálculo, lógica y acertijos! Ideal para jugar en clase.</p>
 
                   <div className="space-y-4 mb-8">
                     <button
                       onClick={() => setMode('profesorMenu')}
-                      className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-4 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition flex items-center justify-center gap-2"
+                      className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-4 px-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition flex items-center justify-center gap-2"
                     >
                       📺 Soy Profesor
                     </button>
                     <button
                       onClick={() => setMode('alumnoMenu')}
-                      className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition flex items-center justify-center gap-2"
+                      className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 px-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition flex items-center justify-center gap-2"
                     >
                       📱 Soy Alumno
                     </button>
                   </div>
 
-                  <div className="border-t-2 border-gray-300 pt-6">
-                    <p className="text-center text-sm text-gray-600 mb-4">📱 QR para compartir con los alumnos</p>
+                  <div className="border-t-2 border-gray-200 pt-6">
+                    <p className="text-center text-sm text-gray-600 mb-4">📱 QR para compartir el juego</p>
                     <div className="flex flex-col items-center gap-4">
-                      <img src={generateQRSvg()} alt="MathGame QR" className="w-32 h-32 border-2 border-gray-300 p-2 bg-white rounded" />
+                      <img src={generateQRSvg()} alt="MathGame QR" className="w-32 h-32 border-4 border-blue-400 p-2 bg-white rounded-xl shadow-md" />
                       <button
                         onClick={descargarQR}
                         className="bg-gradient-to-r from-purple-500 to-purple-600 text-white py-2 px-4 rounded-lg font-semibold hover:shadow-lg transition flex items-center justify-center gap-2 text-sm"
                       >
                         ⬇️ Descargar QR
                       </button>
-                      <p className="text-xs text-gray-500 text-center">Guarda este QR para que los alumnos lo escaneen</p>
                     </div>
                   </div>
                 </div>
@@ -267,41 +292,42 @@
 
           // MENÚ PROFESOR
           if (mode === 'profesorMenu') {
+            const points = difficulty === 'facil' ? 10 : difficulty === 'media' ? 20 : 30;
             return (
               <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
-                <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full">
+                <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full">
                   <h1 className="text-3xl font-bold text-center mb-6 text-gray-800">Configuración Profesor</h1>
 
-                  <div className="bg-yellow-100 border-4 border-yellow-400 p-4 rounded-lg mb-6 text-center">
-                    <p className="text-sm text-gray-600">Código de sesión</p>
-                    <p className="text-4xl font-bold text-yellow-600">{gamePin}</p>
+                  <div className="bg-yellow-50 border-4 border-yellow-400 p-4 rounded-xl mb-6 text-center shadow-inner">
+                    <p className="text-sm font-semibold text-gray-700">Código de sesión</p>
+                    <p className="text-5xl font-extrabold text-yellow-600 tracking-widest">{gamePin}</p>
                     <p className="text-xs text-gray-600 mt-2">Comparte este PIN con tus alumnos</p>
                   </div>
 
                   <div className="space-y-6">
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Número de equipos: {numTeams}</label>
-                      <input type="range" min="2" max="6" value={numTeams} onChange={(e) => setNumTeams(parseInt(e.target.value))} className="w-full h-2 bg-gray-300 rounded-lg" />
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Número de equipos: <span className="text-blue-600 font-extrabold">{numTeams}</span></label>
+                      <input type="range" min="2" max="6" value={numTeams} onChange={(e) => setNumTeams(parseInt(e.target.value))} className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer" />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Dificultad:</label>
-                      <div className="space-y-2">
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Dificultad (Puntos por acierto: +{points}):</label>
+                      <div className="grid grid-cols-3 gap-2">
                         {['facil', 'media', 'dificil'].map(level => (
-                          <button key={level} onClick={() => setDifficulty(level)} className={`w-full py-2 px-4 rounded-lg font-semibold transition ${difficulty === level ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}`}>
-                            {level === 'facil' ? 'Fácil' : level === 'media' ? 'Media' : 'Difícil'}
+                          <button key={level} onClick={() => setDifficulty(level)} className={`w-full py-2 px-4 rounded-lg font-semibold transition shadow ${difficulty === level ? 'bg-blue-600 text-white shadow-xl scale-105' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}`}>
+                            {level.charAt(0).toUpperCase() + level.slice(1)}
                           </button>
                         ))}
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Número de preguntas: {totalQuestions}</label>
-                      <input type="range" min="5" max="30" step="5" value={totalQuestions} onChange={(e) => setTotalQuestions(parseInt(e.target.value))} className="w-full h-2 bg-gray-300 rounded-lg" />
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Número de preguntas: <span className="text-blue-600 font-extrabold">{totalQuestions}</span></label>
+                      <input type="range" min="5" max="30" step="5" value={totalQuestions} onChange={(e) => setTotalQuestions(parseInt(e.target.value))} className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer" />
                     </div>
 
-                    <button onClick={initGameProfesor} className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-3 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition">▶️ Comenzar Juego</button>
-                    <button onClick={salir} className="w-full bg-gray-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-gray-600 transition">Volver</button>
+                    <button onClick={initGameProfesor} className="w-full bg-gradient-to-r from-green-500 to-teal-600 text-white py-3 px-4 rounded-xl font-bold text-lg hover:shadow-2xl transition shadow-lg">▶️ Comenzar Juego</button>
+                    <button onClick={salir} className="w-full bg-gray-500 text-white py-2 px-4 rounded-xl font-semibold hover:bg-gray-600 transition">Volver</button>
                   </div>
                 </div>
               </div>
@@ -312,17 +338,24 @@
           if (mode === 'alumnoMenu') {
             return (
               <div className="min-h-screen bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center p-4">
-                <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full">
+                <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full">
                   <h1 className="text-3xl font-bold text-center mb-6 text-gray-800">Unirse a la partida</h1>
 
                   <div className="space-y-6">
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Código PIN de la sesión:</label>
-                      <input type="text" value={inputPin} onChange={(e) => setInputPin(e.target.value.toUpperCase())} placeholder="Ej: ABC123" maxLength="6" className="w-full p-3 border-2 border-gray-300 rounded-lg text-center text-3xl font-bold tracking-widest" />
+                      <input 
+                        type="text" 
+                        value={inputPin} 
+                        onChange={(e) => setInputPin(e.target.value.toUpperCase())} 
+                        placeholder="Ej: ABC123" 
+                        maxLength="6" 
+                        className="w-full p-3 border-4 border-green-400 rounded-lg text-center text-4xl font-extrabold tracking-widest text-gray-800 uppercase focus:border-green-600" 
+                      />
                     </div>
 
-                    <button onClick={unirAlEquipo} className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-3 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition">▶️ Unirse</button>
-                    <button onClick={() => setMode('selectMode')} className="w-full bg-gray-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-gray-600 transition">Volver</button>
+                    <button onClick={unirAlEquipo} className="w-full bg-gradient-to-r from-green-500 to-teal-600 text-white py-3 px-4 rounded-xl font-bold text-lg hover:shadow-xl transition shadow-lg">🚀 Unirse</button>
+                    <button onClick={() => setMode('selectMode')} className="w-full bg-gray-500 text-white py-2 px-4 rounded-xl font-semibold hover:bg-gray-600 transition">Volver</button>
                   </div>
                 </div>
               </div>
@@ -333,70 +366,79 @@
           if (mode === 'profesorPlaying') {
             const timeColor = timeLeft > 10 ? 'text-green-600' : timeLeft > 5 ? 'text-yellow-600' : 'text-red-600';
             const isLogicQuestion = currentQuestion?.type === 'logica';
+            const currentPoints = difficulty === 'facil' ? 10 : difficulty === 'media' ? 20 : 30;
 
             return (
-              <div className="min-h-screen bg-gradient-to-br from-indigo-500 to-pink-500 flex items-center justify-center p-4">
-                <div className="bg-white rounded-lg shadow-2xl p-8 max-w-5xl w-full">
-                  <div className="flex justify-between items-center mb-6">
-                    <div className="text-center"><p className="text-sm font-semibold text-gray-600">Pregunta</p><p className="text-3xl font-bold text-purple-600">{questionNumber}/{totalQuestions}</p></div>
-                    <div className="text-center"><span className="text-3xl">{currentQuestion?.icon}</span><p className="text-sm font-semibold text-gray-600">{isLogicQuestion ? '🧩 Lógica' : '🧮 Cálculo'}</p></div>
-                    <div className={`text-center ${timeColor}`}><p className="text-4xl font-bold">{timeLeft}s</p></div>
+              <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+                <div className="bg-white rounded-xl shadow-2xl p-8 max-w-5xl w-full">
+                  <h2 className="text-center text-3xl font-extrabold text-indigo-700 mb-6">Pantalla del Profesor (PIN: {gamePin})</h2>
+                  
+                  <div className="flex justify-between items-center mb-6 border-b-2 pb-4">
+                    <div className="text-center p-3 rounded-lg bg-indigo-50"><p className="text-sm font-semibold text-gray-600">Pregunta</p><p className="text-3xl font-bold text-indigo-600">{questionNumber}/{totalQuestions}</p></div>
+                    <div className="text-center p-3 rounded-lg bg-indigo-50"><span className="text-3xl">{currentQuestion?.icon}</span><p className="text-sm font-semibold text-gray-600">{isLogicQuestion ? '🧩 Lógica' : '🧮 Cálculo'}</p></div>
+                    <div className={`text-center p-3 rounded-lg bg-indigo-50 ${timeColor}`}><p className="text-sm font-semibold text-gray-600">Tiempo</p><p className="text-4xl font-extrabold">{timeLeft}s</p></div>
                   </div>
 
-                  <div className={`rounded-lg p-8 mb-8 text-center border-4 ${isLogicQuestion ? 'bg-gradient-to-r from-purple-100 to-pink-100 border-purple-400' : 'bg-gradient-to-r from-yellow-100 to-yellow-50 border-yellow-400'}`}>
-                    <p className={`font-bold mb-4 ${isLogicQuestion ? 'text-2xl text-purple-800' : 'text-6xl text-gray-800'}`}>{currentQuestion?.question}</p>
-                    {isLogicQuestion && <p className="text-sm text-purple-600 italic">💡 {currentQuestion?.hint}</p>}
+                  {/* Área de la Pregunta */}
+                  <div className={`rounded-xl p-10 mb-8 text-center shadow-lg border-4 ${isLogicQuestion ? 'bg-gradient-to-r from-purple-100 to-pink-100 border-purple-400' : 'bg-gradient-to-r from-yellow-100 to-yellow-50 border-yellow-400'}`}>
+                    <p className={`font-bold ${isLogicQuestion ? 'text-3xl text-purple-800' : 'text-6xl text-gray-800'}`}>{currentQuestion?.question}</p>
+                    {isLogicQuestion && <p className="text-lg text-purple-600 italic mt-4">💡 Pista: {currentQuestion?.hint}</p>}
                   </div>
 
+                  {/* Opciones (Deshabilitadas en vista Profesor) */}
                   <div className="grid grid-cols-2 gap-4 mb-8">
                     {currentQuestion?.options.map((option, idx) => (
-                      <button key={idx} disabled className={`text-white p-6 rounded-lg font-bold text-3xl opacity-75 ${isLogicQuestion ? 'bg-gradient-to-br from-purple-500 to-purple-600' : 'bg-gradient-to-br from-blue-500 to-blue-600'}`}>{option}</button>
+                      <div key={idx} className={`text-white p-6 rounded-lg font-bold text-3xl text-center opacity-85 shadow-md ${isLogicQuestion ? 'bg-gradient-to-br from-purple-500 to-purple-600' : 'bg-gradient-to-br from-blue-500 to-blue-600'}`}>{option}</div>
                     ))}
                   </div>
 
-                  <div className="grid gap-3 mb-6" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(150px, 1fr))` }}>
-                    {teams.map(team => (
-                      <div key={team.id} className={`p-4 rounded-lg text-center font-bold transition ${teamAnswers[team.id] ? 'bg-blue-500 text-white scale-105 border-4 border-blue-700' : 'bg-gray-300 text-gray-800'}`}>
-                        <p className="text-sm mb-1">{team.name}</p>
-                        <p className="text-2xl">{teamAnswers[team.id] || '---'}</p>
-                      </div>
-                    ))}
+                  {/* Monitor de Respuestas */}
+                  <div className="mb-6">
+                    <p className="text-xl font-bold text-gray-700 mb-3 text-center">Respuestas Recibidas ({Object.keys(teamAnswers).length}/{numTeams})</p>
+                    <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(150px, 1fr))` }}>
+                      {teams.map(team => (
+                        <div key={team.id} className={`p-4 rounded-xl text-center font-bold transition shadow ${teamAnswers[team.id] !== undefined ? 'bg-green-100 text-green-800 scale-105 border-4 border-green-500' : 'bg-gray-200 text-gray-600'}`}>
+                          <p className="text-sm mb-1">{team.name}</p>
+                          <p className="text-2xl">{teamAnswers[team.id] !== undefined ? '¡Recibida!' : 'Esperando...'}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
+                  {/* Resultados y Botón Siguiente */}
                   {showResults && (
-                    <div className="mt-8 p-4 bg-gray-100 rounded-lg border-4 border-gray-400">
-                      <p className="text-center font-bold text-xl mb-4">✓ Respuesta correcta: {currentQuestion?.answer}</p>
+                    <div className="mt-8 p-6 bg-yellow-50 rounded-xl border-4 border-yellow-400 shadow-xl">
+                      <p className="text-center font-extrabold text-2xl mb-4 text-green-700">✓ RESPUESTA CORRECTA: <span className="text-4xl text-green-900">{currentQuestion?.answer}</span></p>
                       
-                      <div className="grid gap-2 mb-6" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(120px, 1fr))` }}>
+                      <div className="grid gap-3 mb-6" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(120px, 1fr))` }}>
                         {teams.map(team => {
                           const isCorrect = teamAnswers[team.id] === currentQuestion?.answer;
-                          const points = difficulty === 'facil' ? 10 : difficulty === 'media' ? 20 : 30;
                           return (
-                            <div key={team.id} className={`p-2 rounded text-center font-bold ${isCorrect ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
+                            <div key={team.id} className={`p-3 rounded-lg text-center font-bold shadow ${isCorrect ? 'bg-green-200 text-green-800 border-2 border-green-500' : 'bg-red-200 text-red-800 border-2 border-red-500'}`}>
                               <p className="text-sm">{team.name}</p>
-                              <p className="text-lg">{isCorrect ? `✓ +${points}` : '✗'}</p>
+                              <p className="text-lg">{isCorrect ? `✓ +${currentPoints} pts` : '✗ 0 pts'}</p>
                             </div>
                           );
                         })}
                       </div>
 
-                      <div className="mb-6 p-4 bg-white rounded-lg border-2 border-gray-300">
-                        <p className="text-center font-bold text-gray-600 mb-3">PUNTUACIÓN ACTUAL</p>
+                      <div className="mb-6 p-4 bg-white rounded-lg border-2 border-gray-300 shadow-inner">
+                        <p className="text-center font-bold text-gray-700 mb-3 text-xl">🏆 Clasificación Actual</p>
                         <div className="space-y-2">
                           {[...teams].sort((a, b) => b.score - a.score).map((team, idx) => (
-                            <div key={team.id} className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-blue-50 to-purple-50 rounded">
-                              <span className="font-bold">{idx + 1}. {team.name}</span>
-                              <span className="text-lg font-bold text-blue-600">{team.score} pts</span>
+                            <div key={team.id} className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
+                              <span className="font-extrabold text-lg">{idx + 1}. {team.name}</span>
+                              <span className="text-xl font-extrabold text-blue-600">{team.score} pts</span>
                             </div>
                           ))}
                         </div>
                       </div>
 
-                      <button onClick={nextQuestion} className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-3 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition">Siguiente Pregunta →</button>
+                      <button onClick={nextQuestion} className="w-full bg-gradient-to-r from-green-500 to-teal-600 text-white py-3 px-4 rounded-xl font-bold text-lg hover:shadow-2xl transition shadow-lg">Siguiente Pregunta →</button>
                     </div>
                   )}
 
-                  <button onClick={salir} className="mt-4 w-full bg-red-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-red-600 transition">Salir</button>
+                  <button onClick={salir} className="mt-6 w-full bg-red-500 text-white py-2 px-4 rounded-xl font-semibold hover:bg-red-600 transition shadow">🔴 Salir y Terminar Sesión</button>
                 </div>
               </div>
             );
@@ -406,63 +448,94 @@
           if (mode === 'alumnoPlaying') {
             const isLogicQuestion = currentQuestion?.type === 'logica';
 
+            // El alumno solo ve la pregunta actual, si el profesor ya mostró resultados, no se puede responder
+            if (showResults) {
+                return (
+                    <div className="min-h-screen bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full text-center">
+                            <p className="text-5xl mb-4">⏳</p>
+                            <h2 className="text-3xl font-bold text-red-800 mb-4">¡Tiempo agotado!</h2>
+                            <p className="text-xl text-gray-600">Esperando que el profesor muestre la siguiente pregunta...</p>
+                        </div>
+                    </div>
+                );
+            }
+
             return (
               <div className="min-h-screen bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center p-4">
-                <div className="bg-white rounded-lg shadow-2xl p-8 max-w-2xl w-full">
-                  <div className="flex justify-between items-center mb-6">
+                <div className="bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full">
+                  <div className="flex justify-between items-center mb-6 border-b-2 pb-4">
                     <div className="text-center flex-1"><p className="text-sm font-semibold text-gray-600">Pregunta</p><p className="text-3xl font-bold text-green-600">{questionNumber}/{totalQuestions}</p></div>
                     <div className="text-center flex-1"><span className="text-3xl">{currentQuestion?.icon}</span><p className="text-sm font-semibold text-gray-600">{isLogicQuestion ? '🧩 Lógica' : '🧮 Cálculo'}</p></div>
-                    <div className="text-center flex-1"><p className="text-3xl font-bold text-red-600">{timeLeft}s</p></div>
+                    <div className="text-center flex-1"><p className="text-sm font-semibold text-gray-600">Tiempo</p><p className="text-4xl font-extrabold text-red-600">{timeLeft}s</p></div>
+                  </div>
+                  
+                  {/* Pregunta */}
+                  <div className={`rounded-xl p-8 mb-8 text-center shadow-md border-4 ${isLogicQuestion ? 'bg-gradient-to-r from-purple-100 to-pink-100 border-purple-400' : 'bg-gradient-to-r from-yellow-100 to-yellow-50 border-yellow-400'}`}>
+                    <p className={`font-extrabold ${isLogicQuestion ? 'text-3xl text-purple-800' : 'text-5xl text-gray-800'}`}>{currentQuestion?.question}</p>
+                    {isLogicQuestion && <p className="text-md text-purple-600 italic mt-3">💡 ¡A pensar!</p>}
                   </div>
 
-                  <div className={`rounded-lg p-8 mb-8 text-center border-4 ${isLogicQuestion ? 'bg-gradient-to-r from-purple-100 to-pink-100 border-purple-400' : 'bg-gradient-to-r from-yellow-100 to-yellow-50 border-yellow-400'}`}>
-                    <p className={`font-bold mb-4 ${isLogicQuestion ? 'text-2xl text-purple-800' : 'text-5xl text-gray-800'}`}>{currentQuestion?.question}</p>
-                    {isLogicQuestion && <p className="text-sm text-purple-600 italic">💡 {currentQuestion?.hint}</p>}
-                  </div>
-
+                  {/* Opciones */}
                   <div className="grid grid-cols-2 gap-4 mb-6">
                     {currentQuestion?.options.map((option, idx) => (
-                      <button key={idx} onClick={() => handleAlumnoAnswer(option)} className={`text-white p-6 rounded-lg font-bold text-3xl transition transform hover:scale-105 ${alumnoRespuesta === option ? 'ring-4 ring-white scale-110 ' + (isLogicQuestion ? 'bg-gradient-to-br from-purple-600 to-purple-700' : 'bg-gradient-to-br from-blue-600 to-blue-700') : isLogicQuestion ? 'bg-gradient-to-br from-purple-500 to-purple-600' : 'bg-gradient-to-br from-blue-500 to-blue-600'}`}>{option}</button>
+                      <button 
+                        key={idx} 
+                        onClick={() => handleAlumnoAnswer(option)} 
+                        disabled={respuestaEnviada || timeLeft === 0}
+                        className={`text-white p-6 rounded-xl font-bold text-3xl transition transform shadow-lg 
+                          ${alumnoRespuesta === option && !respuestaEnviada ? 'ring-4 ring-yellow-400 scale-105' : ''} 
+                          ${respuestaEnviada ? 'opacity-50 cursor-not-allowed' : 'hover:scale-[1.02]'}
+                          ${isLogicQuestion ? 'bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600' : 'bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600'}`
+                        }
+                      >
+                        {option}
+                      </button>
                     ))}
                   </div>
 
-                  {alumnoRespuesta !== null ? (
-                    <button onClick={enviarRespuesta} className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition">✓ Enviar Respuesta</button>
+                  {/* Botón Enviar */}
+                  {alumnoRespuesta !== null && !respuestaEnviada ? (
+                    <button onClick={enviarRespuesta} className="w-full bg-gradient-to-r from-green-500 to-teal-600 text-white py-4 px-4 rounded-xl font-bold text-lg hover:shadow-2xl transition shadow-lg">✓ ¡Listo! Enviar Respuesta</button>
+                  ) : respuestaEnviada ? (
+                    <div className="w-full bg-yellow-500 text-white py-4 px-4 rounded-xl font-bold text-lg text-center shadow-inner">✅ ¡Respuesta Enviada! Esperando al Profesor...</div>
                   ) : (
-                    <div className="w-full bg-gray-300 text-gray-700 py-4 px-4 rounded-lg font-bold text-lg text-center">Selecciona una respuesta</div>
+                    <div className="w-full bg-gray-300 text-gray-700 py-4 px-4 rounded-xl font-bold text-lg text-center shadow-inner">Selecciona una respuesta para enviar</div>
                   )}
                 </div>
               </div>
             );
           }
 
-          // RESULTADOS
+          // RESULTADOS FINALES
           if (mode === 'resultados') {
             const sortedTeams = [...teams].sort((a, b) => b.score - a.score);
 
             return (
               <div className="min-h-screen bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center p-4">
-                <div className="bg-white rounded-lg shadow-2xl p-8 max-w-2xl w-full">
+                <div className="bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full">
                   <div className="text-center mb-8">
-                    <h1 className="text-4xl font-bold text-gray-800">¡RESULTADOS FINALES!</h1>
+                    <h1 className="text-5xl font-extrabold text-orange-800 mb-2">🎉 ¡RESULTADOS FINALES!</h1>
+                    <p className="text-xl text-gray-600">¡Gracias por jugar!</p>
                   </div>
 
                   <div className="space-y-4 mb-8">
                     {sortedTeams.map((team, idx) => (
-                      <div key={team.id} className={`p-4 rounded-lg flex items-center justify-between font-bold text-lg ${idx === 0 ? 'bg-yellow-100 border-4 border-yellow-400' : idx === 1 ? 'bg-gray-100 border-4 border-gray-400' : 'bg-orange-100 border-4 border-orange-400'}`}>
-                        <span>{idx + 1}º - {team.name}</span>
-                        <span className="text-2xl">{team.score} PUNTOS</span>
+                      <div key={team.id} className={`p-5 rounded-xl flex items-center justify-between font-extrabold text-xl shadow-lg ${idx === 0 ? 'bg-yellow-200 border-4 border-yellow-600 text-yellow-900 scale-105' : idx === 1 ? 'bg-gray-200 border-4 border-gray-500 text-gray-800' : idx === 2 ? 'bg-orange-200 border-4 border-orange-500 text-orange-800' : 'bg-white border-2 border-gray-300 text-gray-700'}`}>
+                        <span>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}º`} - {team.name}</span>
+                        <span className="text-3xl">{team.score} PTS</span>
                       </div>
                     ))}
                   </div>
 
-                  <button onClick={salir} className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition">Volver al inicio</button>
+                  <button onClick={salir} className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-4 rounded-xl font-bold text-lg hover:shadow-xl transition shadow-lg">Volver al inicio</button>
                 </div>
               </div>
             );
           }
         }
 
+        // Renderizar la aplicación React
         ReactDOM.createRoot(document.getElementById('root')).render(<MathGame />);
     </script>
 </body>
