@@ -21,7 +21,13 @@
 
         function MathGame() {
             const [mode, setMode] = useState('selectMode');
-            const [gamePin, setGamePin] = useState(Math.random().toString(36).substring(2, 8).toUpperCase());
+            const [gamePin, setGamePin] = useState(() => {
+                const saved = localStorage.getItem('mathgame_pin');
+                if (saved) return saved;
+                const newPin = Math.random().toString(36).substring(2, 8).toUpperCase();
+                localStorage.setItem('mathgame_pin', newPin);
+                return newPin;
+            });
             const [inputPin, setInputPin] = useState('');
             const [teams, setTeams] = useState([]);
             const [numTeams, setNumTeams] = useState(2);
@@ -34,6 +40,18 @@
             const [totalQuestions, setTotalQuestions] = useState(10);
             const [teamId, setTeamId] = useState(null);
             const [alumnoRespuesta, setAlumnoRespuesta] = useState(null);
+
+            useEffect(() => {
+                if (gamePin === '') {
+                    setGamePin(Math.random().toString(36).substring(2, 8).toUpperCase());
+                }
+            }, [gamePin]);
+
+            useEffect(() => {
+                if (gamePin === '') {
+                    setGamePin(Math.random().toString(36).substring(2, 8).toUpperCase());
+                }
+            }, [gamePin]);
 
             useEffect(() => {
                 if ((mode === 'profesorPlaying' || mode === 'alumnoPlaying') && !showResults && timeLeft > 0) {
@@ -139,7 +157,9 @@
                 setQuestionNumber(1);
                 setTeamId(null);
                 setAlumnoRespuesta(null);
-                setGamePin(Math.random().toString(36).substring(2, 8).toUpperCase());
+                const newPin = Math.random().toString(36).substring(2, 8).toUpperCase();
+                setGamePin(newPin);
+                localStorage.setItem('mathgame_pin', newPin);
             };
 
             const generateQRSvg = () => `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(window.location.href)}`;
