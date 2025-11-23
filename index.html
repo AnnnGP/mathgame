@@ -4,8 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MathGame - Competencia Matemática</title>
+    <!-- Librerías de React -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- ¡Línea Faltante! Necesaria para compilar el JSX en el navegador -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Tailwind CSS para estilos -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif; }
@@ -18,9 +22,11 @@
         
         function MathGame() {
           const [mode, setMode] = useState('selectMode');
+          // Genera un PIN aleatorio
           const [gamePin, setGamePin] = useState(Math.random().toString(36).substring(2, 8).toUpperCase());
           const [inputPin, setInputPin] = useState('');
           const [equipoNombre, setEquipoNombre] = useState('');
+          const [joinError, setJoinError] = useState(false); // Nuevo estado para error de PIN
           
           const [teams, setTeams] = useState([]);
           const [numTeams, setNumTeams] = useState(2);
@@ -34,6 +40,7 @@
           const [teamId, setTeamId] = useState(null);
           const [alumnoRespuesta, setAlumnoRespuesta] = useState(null);
 
+          // Lógica del temporizador
           useEffect(() => {
             if ((mode === 'profesorPlaying' || mode === 'alumnoPlaying') && !showResults && timeLeft > 0) {
               const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
@@ -44,11 +51,13 @@
             }
           }, [timeLeft, mode, showResults]);
 
+          // Generación de preguntas de cálculo
           const generateCalculoQuestion = () => {
             let a, b, operation, answer;
             const operations = ['+', '-', '×', '÷'];
             const selectedOp = operations[Math.floor(Math.random() * operations.length)];
 
+            // Determinar rango de números según la dificultad
             if (difficulty === 'facil') {
               a = Math.floor(Math.random() * 20) + 1;
               b = Math.floor(Math.random() * 20) + 1;
@@ -60,6 +69,7 @@
               b = Math.floor(Math.random() * 100) + 1;
             }
 
+            // Asegurar que la resta sea positiva y la división tenga resultado entero
             if (selectedOp === '+') {
               answer = a + b;
             } else if (selectedOp === '-') {
@@ -70,9 +80,10 @@
             } else {
               b = b !== 0 ? b : 1;
               answer = Math.floor(a / b);
-              a = answer * b + Math.floor(Math.random() * b);
+              a = answer * b + Math.floor(Math.random() * b); // Generar 'a' para que la división funcione
             }
 
+            // Generar opciones falsas
             const options = [answer];
             while (options.length < 4) {
               const wrong = answer + (Math.random() > 0.5 ? 1 : -1) * (Math.floor(Math.random() * 10) + 1);
@@ -88,6 +99,7 @@
             };
           };
 
+          // Generación de preguntas de lógica (hardcoded)
           const generateLogicQuestion = () => {
             const logicQuestions = [
               {
@@ -137,10 +149,12 @@
           };
 
           const generateQuestion = () => {
+            // Alternar entre cálculo y lógica
             const isCalculo = questionNumber % 2 === 1;
             return isCalculo ? generateCalculoQuestion() : generateLogicQuestion();
           };
 
+          // Iniciar el juego (Profesor)
           const initGameProfesor = () => {
             const newTeams = Array(numTeams).fill(0).map((_, i) => ({
               id: i,
@@ -156,12 +170,16 @@
             setMode('profesorPlaying');
           };
 
+          // Unirse al juego (Alumno)
           const unirAlEquipo = () => {
+            setJoinError(false);
             if (inputPin.toUpperCase() === gamePin) {
-              setTeamId(0);
+              // Simulación: Asignar al Equipo 1 (0) para la demo
+              setTeamId(0); 
               setMode('alumnoPlaying');
             } else {
-              alert('PIN incorrecto');
+              // Muestra un mensaje de error en la UI en lugar de usar alert()
+              setJoinError(true); 
               setInputPin('');
             }
           };
@@ -181,6 +199,7 @@
           };
 
           const nextQuestion = () => {
+            // Lógica para actualizar puntuaciones y pasar a la siguiente pregunta
             if (questionNumber >= totalQuestions) {
               setMode('resultados');
             } else {
@@ -202,21 +221,25 @@
           };
 
           const salir = () => {
+            // Resetear todo el estado
             setMode('selectMode');
             setTeams([]);
             setTeamAnswers({});
             setQuestionNumber(1);
             setTeamId(null);
             setAlumnoRespuesta(null);
+            // Generar un nuevo PIN para la siguiente sesión
             setGamePin(Math.random().toString(36).substring(2, 8).toUpperCase());
           };
 
+          // Generación de QR (usando API externa)
           const generateQRSvg = () => {
             const text = window.location.href;
             const encodedText = encodeURIComponent(text);
             return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodedText}`;
           };
 
+          // Descarga del QR
           const descargarQR = () => {
             const link = document.createElement('a');
             link.href = generateQRSvg();
@@ -224,7 +247,7 @@
             link.click();
           };
 
-          // PANTALLA INICIAL
+          // PANTALLA INICIAL (Select Mode)
           if (mode === 'selectMode') {
             return (
               <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
@@ -320,6 +343,12 @@
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Código PIN de la sesión:</label>
                       <input type="text" value={inputPin} onChange={(e) => setInputPin(e.target.value.toUpperCase())} placeholder="Ej: ABC123" maxLength="6" className="w-full p-3 border-2 border-gray-300 rounded-lg text-center text-3xl font-bold tracking-widest" />
                     </div>
+
+                    {joinError && (
+                      <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm font-semibold text-center">
+                        PIN incorrecto. Inténtalo de nuevo.
+                      </div>
+                    )}
 
                     <button onClick={unirAlEquipo} className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-3 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition">▶️ Unirse</button>
                     <button onClick={() => setMode('selectMode')} className="w-full bg-gray-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-gray-600 transition">Volver</button>
@@ -467,3 +496,4 @@
     </script>
 </body>
 </html>
+
