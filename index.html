@@ -19,8 +19,8 @@
         const e = React.createElement;
         const { useState, useEffect, useCallback } = React;
 
-        const GAME_KEY = 'MathGameSessionState'; // Estado Global (Profesor)
-        const LOCAL_KEY = 'MathGameLocalState'; // Estado Local (Alumno: teamId, mode)
+        const GAME_KEY = 'MathGameSessionState'; 
+        const LOCAL_KEY = 'MathGameLocalState'; 
 
         // Función para obtener el estado del localStorage
         const getInitialState = (key, defaultState) => {
@@ -60,17 +60,18 @@
 
             const [state, setState] = useState(() => ({
                 mode: determineInitialMode(globalState, localState, initialUrlMode),
-                teams: globalState.teams || [],
+                // 🐛 CORRECCIÓN CRÍTICA: Aseguramos que 'teams' sea un array por defecto
+                teams: globalState.teams || [], 
                 difficulty: globalState.difficulty || 'media',
                 currentQuestion: globalState.currentQuestion || null,
-                teamAnswers: globalState.teamAnswers || {},
+                // 🐛 CORRECCIÓN CRÍTICA: Aseguramos que 'teamAnswers' sea un objeto vacío
+                teamAnswers: globalState.teamAnswers || {}, 
                 showResults: globalState.showResults || false,
                 questionNumber: globalState.questionNumber || 1,
                 timeLeft: globalState.timeLeft || 20,
                 totalQuestions: globalState.totalQuestions || 10,
                 numTeams: globalState.numTeams || 3,
                 
-                // Estados específicos del dispositivo (Alumno)
                 teamId: localState.teamId || null, 
                 alumnoRespuesta: localState.alumnoRespuesta || null
             }));
@@ -113,40 +114,38 @@
                     if (event.key === GAME_KEY && event.newValue) {
                         const newState = JSON.parse(event.newValue);
                         setState(prevState => {
-                            // Si el profesor inicia el juego, forzamos al alumno a jugar (o seleccionar equipo si no lo ha hecho)
                             let newMode = prevState.mode;
-                            if (newState.mode === 'profesorPlaying' && prevState.mode !== 'alumnoPlaying' && prevState.teamId === null) {
-                                newMode = 'selectTeam';
-                            } else if (newState.mode === 'profesorPlaying' && prevState.teamId !== null) {
+                            if (newState.mode === 'profesorPlaying' && prevState.teamId !== null) {
                                 newMode = 'alumnoPlaying';
-                            } else if (newState.mode === 'selectMode') {
-                                newMode = 'selectMode'; // Resetear si el profesor sale
-                            } else if (newState.mode === 'profesorPlaying' && (prevState.mode === 'profesorMenu' || prevState.mode === 'selectMode')) {
+                            } else if (newState.mode === 'profesorPlaying' && prevState.teamId === null) {
                                 newMode = 'selectTeam';
-                            } else {
-                                newMode = newState.mode;
+                            } else if (newState.mode === 'selectMode') {
+                                newMode = 'selectMode'; 
+                            } else if (newState.mode === 'profesorMenu') {
+                                newMode = 'profesorMenu';
                             }
+                            
+                            // 🐛 CORRECCIÓN: Aseguramos que los valores sean seguros antes de usarlos
+                            const newTeams = newState.teams || []; 
+                            const newTeamAnswers = newState.teamAnswers || {};
 
 
                             return {
                                 ...prevState,
-                                // Sincronizamos el estado de juego
                                 mode: newMode,
-                                teams: newState.teams,
+                                teams: newTeams,
                                 currentQuestion: newState.currentQuestion,
-                                teamAnswers: newState.teamAnswers,
+                                teamAnswers: newTeamAnswers,
                                 showResults: newState.showResults,
                                 questionNumber: newState.questionNumber,
                                 timeLeft: newState.timeLeft,
                                 totalQuestions: newState.totalQuestions,
                                 numTeams: newState.numTeams,
                                 
-                                // Resetear respuesta del alumno cuando cambia la pregunta
                                 alumnoRespuesta: newState.currentQuestion === prevState.currentQuestion ? prevState.alumnoRespuesta : null
                             };
                         });
                     }
-                    // Si el profesor ha reseteado el juego (eliminar ambas claves)
                     if (event.key === GAME_KEY && event.newValue === null) {
                          setState(prevState => ({ ...prevState, mode: 'selectMode' }));
                     }
@@ -159,7 +158,7 @@
             return [state, updateState];
         };
 
-        // --- Componente principal MathGame y el resto de funciones... (sin cambios estructurales mayores) ---
+        // --- Componente principal MathGame y el resto de funciones... ---
         function MathGame() {
             
             const getUrlMode = () => {
@@ -187,3 +186,151 @@
                     }, 1000);
                     return () => clearTimeout(timer);
                 }
+                if (timeLeft === 0 && !showResults && mode === 'profesorPlaying') {
+                    updateState({ showResults: true });
+                }
+            }, [timeLeft, mode, showResults, updateState]);
+
+            // --- LÓGICA DEL JUEGO (Preguntas) ---
+
+            const generateCalculoQuestion = useCallback(() => {
+                let a = Math.floor(Math.random() * (difficulty === 'facil' ? 20 : difficulty === 'media' ? 50 : 100)) + 1;
+                let b = Math.floor(Math.random() * (difficulty === 'facil' ? 20 : difficulty === 'media' ? 50 : 100)) + 1;
+                const operations = ['+', '-', '×', '÷'];
+                const op = operations[Math.floor(Math.random() * operations.length)];
+                
+                let answer;
+                if (op === '+') answer = a + b;
+                else if (op === '-') { 
+                    answer = Math.abs(a - b); 
+                    if (a < b) [a, b] = [b, a]; 
+                }
+                else if (op === '×') answer = a * b;
+                else { 
+                    const divisor = b || 1;
+                    const result = Math.floor(a / divisor);
+                    a = result * divisor;
+                    answer = result;
+                }
+
+                const options = [answer];
+                while (options.length < 4) {
+                    const wrong = answer + (Math.random() > 0.5 ? 1 : -1) * (Math.floor(Math.random() * (difficulty === 'facil' ? 5 : 10)) + 1);
+                    if (!options.includes(wrong) && wrong > 0) options.push(wrong);
+                }
+
+                return { type: 'calculo', question: `${a} ${op} ${b}`, answer, options: options.sort(() => Math.random() - 0.5), icon: '🧮' };
+            }, [difficulty]);
+
+            const generateLogicQuestion = useCallback(() => {
+                const questions = [
+                    { question: 'Si 2+2=5, 3+3=7, 4+4=?', answer: 9, options: [8, 9, 10, 11], hint: 'Mira el patrón' },
+                    { question: 'Un caracol sube 3m de día y baja 2m de noche. ¿Cuántos días tarda en subir 10m?', answer: 8, options: [8, 9, 10, 12], hint: 'Piensa en el último día' },
+                    { question: '¿Cuántas veces cabe el número 1 en el número 11?', answer: 2, options: [1, 2, 3, 11], hint: 'Cuenta con cuidado' },
+                    { question: 'Si un cuadrado tiene 4 lados, ¿cuántos lados tiene el ángulo de un cuadrado?', answer: 0, options: [0, 1, 2, 4], hint: 'Un ángulo no es una forma' },
+                    { question: 'Juan tiene 5 manzanas. Da 2 a María. ¿Cuántas le quedan?', answer: 3, options: [1, 2, 3, 5], hint: 'Resta simple' },
+                    { question: '¿Cuál es el siguiente número? 2, 4, 8, 16, ?', answer: 32, options: [24, 28, 32, 64], hint: 'Se multiplica por 2' }
+                ];
+                const q = questions[Math.floor(Math.random() * questions.length)];
+                return { type: 'logica', ...q, icon: '🧩' };
+            }, []);
+
+            const generateQuestion = useCallback(() => questionNumber % 2 === 1 ? generateCalculoQuestion() : generateLogicQuestion(), [questionNumber, generateCalculoQuestion, generateLogicQuestion]);
+
+
+            // --- CONTROL DEL JUEGO ---
+
+            const initGame = () => {
+                const newTeams = Array(numTeams).fill(0).map((_, i) => ({ id: i, name: `Equipo ${i + 1}`, score: 0 }));
+                updateState({
+                    teams: newTeams,
+                    teamAnswers: {},
+                    questionNumber: 1,
+                    currentQuestion: generateQuestion(),
+                    timeLeft: 20,
+                    showResults: false,
+                    mode: 'profesorPlaying'
+                });
+            };
+
+            const setNumTeamsLocal = (count) => updateState({ numTeams: count });
+            const setDifficultyLocal = (level) => updateState({ difficulty: level });
+            const setTotalQuestionsLocal = (count) => updateState({ totalQuestions: count });
+
+            const selectAndJoinTeam = (id) => {
+                updateState({ teamId: id, mode: 'alumnoPlaying' }); 
+            };
+
+            const handleAlumnoAnswer = (option) => updateState({ alumnoRespuesta: option });
+
+            const enviarRespuesta = () => {
+                if (alumnoRespuesta !== null) {
+                    updateState({ 
+                        teamAnswers: { ...teamAnswers, [teamId]: alumnoRespuesta },
+                        alumnoRespuesta: null 
+                    }); 
+                }
+            };
+
+            const nextQuestion = () => {
+                const newTeams = teams.map(team => {
+                    const teamAnswer = teamAnswers[team.id];
+                    if (teamAnswer === currentQuestion.answer) {
+                        const points = difficulty === 'facil' ? 10 : difficulty === 'media' ? 20 : 30;
+                        return { ...team, score: team.score + points };
+                    }
+                    return team;
+                });
+                
+                if (questionNumber >= totalQuestions) {
+                    updateState({ mode: 'resultados', teams: newTeams });
+                } else {
+                    updateState({
+                        teams: newTeams,
+                        teamAnswers: {},
+                        questionNumber: questionNumber + 1,
+                        currentQuestion: generateQuestion(),
+                        timeLeft: 20,
+                        showResults: false,
+                        alumnoRespuesta: null, 
+                    });
+                }
+            };
+
+            const salir = () => {
+                // Limpiar TODAS las claves al salir
+                localStorage.removeItem(GAME_KEY);
+                localStorage.removeItem(LOCAL_KEY);
+                updateState({
+                    mode: 'selectMode',
+                    teams: [],
+                    teamAnswers: {},
+                    questionNumber: 1,
+                    teamId: null,
+                    alumnoRespuesta: null,
+                    currentQuestion: null,
+                });
+                window.history.pushState({}, '', window.location.pathname);
+            };
+
+            const generateRoleUrl = (role) => {
+                const baseURL = window.location.origin + window.location.pathname;
+                return `${baseURL}?r=${role}`;
+            };
+
+            const copyToClipboard = (text) => {
+                navigator.clipboard.writeText(text).then(() => {
+                    alert('URL copiada al portapapeles.');
+                }).catch(err => {
+                    console.error('Error al copiar: ', err);
+                });
+            };
+            
+            // --- VISTAS DEL JUEGO ---
+
+            // PANTALLA INICIAL (Acceso por URLs)
+            if (mode === 'selectMode') {
+                const urlProfesor = generateRoleUrl('profesor');
+                const urlAlumno = generateRoleUrl('alumno');
+
+                return e('div', { className: 'min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-
