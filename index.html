@@ -159,7 +159,7 @@
             this.timerInterval = setInterval(() => {
               if (this.timeLeft > 0 && this.isActive) {
                 this.timeLeft--;
-                this.render();
+                this.updateTimer();
               } else if (this.timeLeft <= 0 && this.isActive) {
                 this.isActive = false;
                 clearInterval(this.timerInterval);
@@ -168,6 +168,17 @@
                 setTimeout(() => this.startNewChallenge(), 2000);
               }
             }, 1000);
+          }
+
+          updateTimer() {
+            const timerEl = document.getElementById('timer-display');
+            const timerContainerEl = document.getElementById('timer-container');
+            if (timerEl && timerContainerEl) {
+              timerEl.textContent = this.timeLeft + 's';
+              const pct = (this.timeLeft / TIME_LIMITS[this.currentChallenge.type]) * 100;
+              const colorClass = pct > 60 ? 'text-green-400' : pct > 30 ? 'text-yellow-400' : 'text-red-400';
+              timerContainerEl.className = `flex items-center gap-2 ${colorClass} font-bold text-2xl`;
+            }
           }
 
           checkAnswer() {
@@ -285,9 +296,9 @@
                             ${ch.type === 'math' ? 'Matemáticas' : ch.type === 'sequence' ? 'Secuencias' : 'Lógica Visual'}
                           </span>
                         </div>
-                        <div class="flex items-center gap-2 ${this.getTimeColor()} font-bold text-2xl">
+                        <div id="timer-container" class="flex items-center gap-2 ${this.getTimeColor()} font-bold text-2xl">
                           ${icons.clock}
-                          <span>${this.timeLeft}s</span>
+                          <span id="timer-display">${this.timeLeft}s</span>
                         </div>
                       </div>
                       <div class="mb-6">
@@ -305,11 +316,12 @@
                         </div>
                       ` : `
                         <div class="mb-6">
-                          <input type="number" id="answerInput" 
+                          <input type="tel" id="answerInput" 
                             class="w-full p-4 text-3xl text-center border-4 border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
                             placeholder="Tu respuesta" 
-                            onkeypress="if(event.key==='Enter')app.checkAnswer()"
-                            oninput="app.answer=this.value">
+                            value="${this.answer}"
+                            onkeydown="if(event.key==='Enter'){event.preventDefault();app.checkAnswer()}"
+                            oninput="const cleaned=this.value.replace(/[^0-9-]/g,'');app.answer=cleaned;this.value=cleaned;">
                         </div>
                         <button onclick="app.checkAnswer()" 
                           class="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-4 rounded-xl text-2xl font-bold hover:from-blue-600 hover:to-purple-600 transition-all shadow-lg">
@@ -336,27 +348,29 @@
             else if (this.view === 'display') {
               const sorted = [...TEAMS].sort((a, b) => (this.scores[b.id] || 0) - (this.scores[a.id] || 0));
               app.innerHTML = `
-                <div class="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-6">
-                  <div class="max-w-6xl mx-auto">
-                    <div class="text-center mb-8">
-                      <h1 class="text-5xl font-bold text-white mb-3 flex items-center justify-center gap-4">
-                        ${icons.trophy} Competición Matemática ${icons.trophy}
+                <div class="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-4">
+                  <div class="max-w-5xl mx-auto">
+                    <div class="text-center mb-6">
+                      <h1 class="text-4xl font-bold text-white mb-2 flex items-center justify-center gap-3">
+                        <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
+                        Competición Matemática
+                        <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
                       </h1>
-                      <p class="text-2xl text-blue-200 pulse-slow">🔥 Clasificación en Tiempo Real 🔥</p>
+                      <p class="text-xl text-blue-200 pulse-slow">🔥 Clasificación en Tiempo Real 🔥</p>
                     </div>
-                    <div class="grid grid-cols-1 gap-3 mb-6">
+                    <div class="grid grid-cols-1 gap-2 mb-4">
                       ${sorted.map((team, idx) => `
-                        <div class="${team.color} rounded-2xl p-4 shadow-xl transform hover:scale-105 transition-transform">
+                        <div class="${team.color} rounded-xl p-3 shadow-lg">
                           <div class="flex items-center justify-between text-white">
-                            <div class="flex items-center gap-4">
-                              <div class="text-4xl font-bold bg-white bg-opacity-20 rounded-full w-14 h-14 flex items-center justify-center">
+                            <div class="flex items-center gap-3">
+                              <div class="text-3xl font-bold bg-white bg-opacity-20 rounded-full w-12 h-12 flex items-center justify-center">
                                 ${idx + 1}
                               </div>
-                              <h3 class="text-3xl font-bold">${team.name}</h3>
+                              <h3 class="text-2xl font-bold">${team.name}</h3>
                             </div>
                             <div class="text-right">
-                              <div class="text-5xl font-bold">${this.scores[team.id] || 0}</div>
-                              <div class="text-xl opacity-90">puntos</div>
+                              <div class="text-4xl font-bold">${this.scores[team.id] || 0}</div>
+                              <div class="text-base opacity-90">puntos</div>
                             </div>
                           </div>
                         </div>
@@ -364,11 +378,11 @@
                     </div>
                     <div class="text-center">
                       <button onclick="if(confirm('¿Reiniciar puntuaciones?'))app.resetScores()" 
-                        class="bg-red-500 hover:bg-red-600 text-white px-8 py-4 rounded-xl text-xl font-bold shadow-lg transition-colors">
+                        class="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg text-lg font-bold shadow-lg transition-colors">
                         Reiniciar Puntuaciones
                       </button>
                       <button onclick="app.view='select';app.render()" 
-                        class="ml-4 bg-gray-500 hover:bg-gray-600 text-white px-8 py-4 rounded-xl text-xl font-bold shadow-lg transition-colors">
+                        class="ml-3 bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg text-lg font-bold shadow-lg transition-colors">
                         Volver al Menú
                       </button>
                     </div>
