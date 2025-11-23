@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -146,5 +147,6 @@
             React.createElement('p', { className: 'mb-4 text-center font-bold text-xl' }, `PIN: ${gamePin}`),
             React.createElement('label', null, `Número de equipos: ${numTeams}`),
             React.createElement('input', { type: 'range', min: 2, max: 6, value: numTeams, onChange: e => setNumTeams(parseInt(e.target.value)), className: 'w-full mb-4' }),
-            React.createElement('div', { className: 'mb-4' },
-              ['facil', 'media', 'dific
+            React.createElement('div', { className: 'mb-4 flex gap-2' },
+              ['facil', 'media', 'dificil'].map(level =>
+                React.createElement('button', { key: level, onClick: () => set
