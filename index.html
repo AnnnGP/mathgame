@@ -49,45 +49,35 @@
             this.isActive = false;
             this.timerInterval = null;
             this.syncInterval = null;
+            this.difficulty = 1;
+            this.usedChallenges = new Set();
             this.render();
             this.startSync();
           }
 
           loadScores() {
-            const saved = localStorage.getItem('math-scores');
-            if (saved) return JSON.parse(saved);
             const initial = {};
             TEAMS.forEach(t => initial[t.id] = 0);
             return initial;
           }
 
-          saveScores() {
-            localStorage.setItem('math-scores', JSON.stringify(this.scores));
-            window.dispatchEvent(new Event('storage'));
-          }
-
           startSync() {
             this.syncInterval = setInterval(() => {
-              const saved = localStorage.getItem('math-scores');
-              if (saved) {
-                this.scores = JSON.parse(saved);
-                if (this.view === 'display') this.render();
-              }
+              if (this.view === 'display') this.render();
             }, 1000);
           }
 
           updateScore(teamId, points) {
             this.scores[teamId] = (this.scores[teamId] || 0) + points;
-            this.saveScores();
           }
 
           resetScores() {
             TEAMS.forEach(t => this.scores[t.id] = 0);
-            this.saveScores();
             this.render();
           }
 
           generateMathChallenge() {
+            const difficulty = Math.min(Math.floor(this.difficulty / 3), 3);
             const ops = [
               { type: '+', min: 5, max: 50, points: 10 },
               { type: '-', min: 5, max: 50, points: 10 },
@@ -95,6 +85,12 @@
               { type: '÷', min: 2, max: 10, points: 15 }
             ];
             const op = ops[Math.floor(Math.random() * ops.length)];
+            
+            const minAdjust = difficulty * 3;
+            const maxAdjust = difficulty * 10;
+            const minBase = op.min + minAdjust;
+            const maxBase = op.max + maxAdjust;
+            
             let a, b, result;
             
             if (op.type === '÷') {
@@ -102,8 +98,8 @@
               result = Math.floor(Math.random() * 10) + 1;
               a = b * result;
             } else {
-              a = Math.floor(Math.random() * (op.max - op.min + 1)) + op.min;
-              b = Math.floor(Math.random() * (op.max - op.min + 1)) + op.min;
+              a = Math.floor(Math.random() * (maxBase - minBase + 1)) + minBase;
+              b = Math.floor(Math.random() * (maxBase - minBase + 1)) + minBase;
               if (op.type === '+') result = a + b;
               else if (op.type === '-') {
                 if (a < b) [a, b] = [b, a];
@@ -111,7 +107,14 @@
               } else if (op.type === '×') result = a * b;
             }
             
-            return { type: 'math', question: `${a} ${op.type} ${b}`, answer: result, points: op.points };
+            const points = op.points;
+            return { 
+              type: 'math', 
+              question: `${a} ${op.type} ${b}`, 
+              answer: result, 
+              points: points,
+              difficulty: this.difficulty
+            };
           }
 
           generateSequenceChallenge() {
@@ -122,10 +125,32 @@
               { next: 50, desc: '10, 20, 30, 40, ?' },
               { next: 15, desc: '3, 6, 9, 12, ?' },
               { next: 32, desc: '2, 4, 8, 16, ?' },
-              { next: 60, desc: '100, 90, 80, 70, ?' }
+              { next: 60, desc: '100, 90, 80, 70, ?' },
+              { next: 121, desc: '1, 4, 9, 16, 25, 36, 49, 64, 81, 100, ?' },
+              { next: 55, desc: '1, 2, 3, 5, 8, 13, 21, 34, ?' },
+              { next: 27, desc: '1, 3, 9, 27, ?' },
+              { next: 16, desc: '2, 6, 12, 20, 30, 42, ?' },
+              { next: 13, desc: '1, 1, 2, 3, 5, 8, ?' },
+              { next: 7, desc: '1, 2, 3, 4, 5, 6, ?' },
+              { next: 12, desc: '2, 4, 6, 8, 10, ?' },
+              { next: 20, desc: '4, 8, 12, 16, ?' },
+              { next: 30, desc: '5, 10, 15, 20, 25, ?' },
+              { next: 11, desc: '1, 3, 5, 7, 9, ?' },
+              { next: 25, desc: '1, 4, 9, 16, ?' },
+              { next: 18, desc: '2, 5, 8, 11, 14, 17, ?' },
+              { next: 14, desc: '2, 3, 5, 8, 11, ?' }
             ];
+            
             const p = patterns[Math.floor(Math.random() * patterns.length)];
-            return { type: 'sequence', question: `¿Qué número sigue? ${p.desc}`, answer: p.next, points: 20 };
+            const points = 20;
+            
+            return { 
+              type: 'sequence', 
+              question: `¿Qué número sigue? ${p.desc}`, 
+              answer: p.next, 
+              points: points,
+              difficulty: this.difficulty
+            };
           }
 
           generateVisualChallenge() {
@@ -134,18 +159,55 @@
               { q: '⭐⭐⭐🌙⭐⭐⭐🌙 ¿Qué sigue?', opts: ['🌙', '⭐', '☀️', '🌟'], ans: '⭐' },
               { q: '🟥🟦🟦🟥🟦🟦 ¿Qué sigue?', opts: ['🟦', '🟥', '🟩', '🟨'], ans: '🟥' },
               { q: '1️⃣2️⃣2️⃣3️⃣3️⃣3️⃣ ¿Qué sigue?', opts: ['1️⃣', '2️⃣', '3️⃣', '4️⃣'], ans: '4️⃣' },
-              { q: '🌕🌗🌑🌕🌗🌑 ¿Qué sigue?', opts: ['🌕', '🌗', '🌑', '🌘'], ans: '🌕' }
+              { q: '🌕🌗🌑🌕🌗🌑 ¿Qué sigue?', opts: ['🌕', '🌗', '🌑', '🌘'], ans: '🌕' },
+              { q: '🟢🔵🟢🔵🟢🔵 ¿Qué sigue?', opts: ['🟢', '🔵', '🟡', '🔴'], ans: '🟢' },
+              { q: '🍎🍎🍌🍎🍎🍌 ¿Qué sigue?', opts: ['🍎', '🍌', '🍊', '🍇'], ans: '🍎' },
+              { q: '⚪⚫⚪⚫⚪⚫ ¿Qué sigue?', opts: ['⚪', '⚫', '🔴', '🟡'], ans: '⚪' },
+              { q: '🟩🟨🟦🟩🟨🟦 ¿Qué sigue?', opts: ['🟩', '🟨', '🟦', '🟪'], ans: '🟩' },
+              { q: '⭐🌟✨⭐🌟✨ ¿Qué sigue?', opts: ['⭐', '🌟', '✨', '💫'], ans: '⭐' },
+              { q: '🔴🔴🔴🔵🔴🔴🔴🔵 ¿Qué sigue?', opts: ['🔵', '🔴', '🟢', '🟡'], ans: '🔴' },
+              { q: '🌻🌻🌺🌻🌻🌺 ¿Qué sigue?', opts: ['🌻', '🌺', '🌷', '🌸'], ans: '🌻' },
+              { q: '🟡🟡🟡🔵🟡🟡🟡🔵 ¿Qué sigue?', opts: ['🔵', '🟡', '🟢', '🔴'], ans: '🟡' },
+              { q: '👀👁️👁️👀👁️👁️ ¿Qué sigue?', opts: ['👀', '👁️', '👂', '👃'], ans: '👀' },
+              { q: '💎💎💎🔶💎💎💎🔶 ¿Qué sigue?', opts: ['🔶', '💎', '💍', '✨'], ans: '💎' }
             ];
+            
             const c = challenges[Math.floor(Math.random() * challenges.length)];
-            return { type: 'visual', question: c.q, options: c.opts, answer: c.ans, points: 25 };
+            const points = 25;
+            
+            return { 
+              type: 'visual', 
+              question: c.q, 
+              options: c.opts, 
+              answer: c.ans, 
+              points: points,
+              difficulty: this.difficulty
+            };
           }
 
           startNewChallenge() {
             const rand = Math.random();
-            if (rand < 0.4) this.currentChallenge = this.generateMathChallenge();
-            else if (rand < 0.7) this.currentChallenge = this.generateSequenceChallenge();
-            else this.currentChallenge = this.generateVisualChallenge();
+            let challenge;
+            let attempts = 0;
             
+            do {
+              if (rand < 0.4) challenge = this.generateMathChallenge();
+              else if (rand < 0.7) challenge = this.generateSequenceChallenge();
+              else challenge = this.generateVisualChallenge();
+              
+              const challengeKey = JSON.stringify(challenge);
+              if (!this.usedChallenges.has(challengeKey)) {
+                this.usedChallenges.add(challengeKey);
+                break;
+              }
+              attempts++;
+            } while (attempts < 10);
+            
+            if (this.usedChallenges.size > 30) {
+              this.usedChallenges.clear();
+            }
+            
+            this.currentChallenge = challenge;
             this.answer = '';
             this.feedback = '';
             this.timeLeft = TIME_LIMITS[this.currentChallenge.type];
@@ -198,11 +260,13 @@
               const bonus = this.timeLeft > TIME_LIMITS[this.currentChallenge.type] * 0.7 ? 5 : 0;
               const total = this.currentChallenge.points + bonus;
               this.updateScore(this.selectedTeam.id, total);
+              this.difficulty++;
               this.feedback = `¡CORRECTO! +${total} puntos ${bonus > 0 ? '🚀 ¡Bonus!' : '🎉'}`;
               this.render();
               setTimeout(() => this.startNewChallenge(), 2000);
             } else {
-              this.feedback = '❌ Incorrecto. ¡Inténtalo de nuevo!';
+              this.difficulty = Math.max(1, this.difficulty - 1);
+              this.feedback = `❌ Incorrecto. ¡Inténtalo de nuevo!`;
               this.render();
               setTimeout(() => {
                 this.feedback = '';
@@ -285,7 +349,10 @@
                           <h2 class="text-2xl font-bold">${team.name}</h2>
                           <p class="text-xl">Puntuación: ${this.scores[team.id] || 0}</p>
                         </div>
-                        ${icons.trophy}
+                        <div class="text-right">
+                          <div class="text-2xl font-bold">Nivel: ${this.difficulty}</div>
+                          <div class="text-sm opacity-90">Dificultad</div>
+                        </div>
                       </div>
                     </div>
                     <div class="bg-white rounded-2xl p-8 shadow-2xl">
@@ -395,6 +462,8 @@
           selectTeam(teamId) {
             this.selectedTeam = TEAMS.find(t => t.id === teamId);
             this.view = 'game';
+            this.difficulty = 1;
+            this.usedChallenges.clear();
             this.startNewChallenge();
           }
         }
