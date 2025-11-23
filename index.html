@@ -1,336 +1,521 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MathGame - Competencia Matemática Sincronizada (FINAL)</title>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif; }
-    </style>
-</head>
-<body>
-    <div id="root"></div>
+import React, { useState, useEffect } from 'react';
+import { Trophy, Users, Zap, Target, Brain, Calculator, Clock, Play } from 'lucide-react';
+
+const TEAMS = [
+  { id: 1, name: 'Equipo Rojo', color: 'bg-red-500', textColor: 'text-red-600' },
+  { id: 2, name: 'Equipo Azul', color: 'bg-blue-500', textColor: 'text-blue-600' },
+  { id: 3, name: 'Equipo Verde', color: 'bg-green-500', textColor: 'text-green-600' },
+  { id: 4, name: 'Equipo Amarillo', color: 'bg-yellow-500', textColor: 'text-yellow-600' },
+  { id: 5, name: 'Equipo Naranja', color: 'bg-orange-500', textColor: 'text-orange-600' },
+  { id: 6, name: 'Equipo Morado', color: 'bg-purple-500', textColor: 'text-purple-600' }
+];
+
+const CHALLENGE_TYPES = {
+  MATH: 'math',
+  SEQUENCE: 'sequence',
+  VISUAL: 'visual'
+};
+
+const TIME_LIMITS = {
+  math: 30,
+  sequence: 45,
+  visual: 40
+};
+
+const App = () => {
+  const [view, setView] = useState('select');
+  const [selectedTeam, setSelectedTeam] = useState(null);
+  const [scores, setScores] = useState({});
+  const [currentChallenge, setCurrentChallenge] = useState(null);
+  const [answer, setAnswer] = useState('');
+  const [feedback, setFeedback] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [isActive, setIsActive] = useState(false);
+
+  useEffect(() => {
+    loadScores();
+  }, []);
+
+  useEffect(() => {
+    let interval = null;
+    if (isActive && timeLeft > 0) {
+      interval = setInterval(() => {
+        setTimeLeft(time => {
+          if (time <= 1) {
+            setIsActive(false);
+            handleTimeOut();
+            return 0;
+          }
+          return time - 1;
+        });
+      }, 1000);
+    } else if (timeLeft === 0) {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [isActive, timeLeft]);
+
+  const loadScores = async () => {
+    try {
+      const result = await window.storage.get('team-scores', true);
+      if (result) {
+        setScores(JSON.parse(result.value));
+      } else {
+        const initialScores = {};
+        TEAMS.forEach(team => {
+          initialScores[team.id] = 0;
+        });
+        setScores(initialScores);
+        await window.storage.set('team-scores', JSON.stringify(initialScores), true);
+      }
+    } catch (error) {
+      const initialScores = {};
+      TEAMS.forEach(team => {
+        initialScores[team.id] = 0;
+      });
+      setScores(initialScores);
+      await window.storage.set('team-scores', JSON.stringify(initialScores), true);
+    }
+    setLoading(false);
+  };
+
+  const updateScore = async (teamId, points) => {
+    const newScores = { ...scores, [teamId]: (scores[teamId] || 0) + points };
+    setScores(newScores);
+    await window.storage.set('team-scores', JSON.stringify(newScores), true);
+  };
+
+  const resetScores = async () => {
+    const initialScores = {};
+    TEAMS.forEach(team => {
+      initialScores[team.id] = 0;
+    });
+    setScores(initialScores);
+    await window.storage.set('team-scores', JSON.stringify(initialScores), true);
+  };
+
+  const generateMathChallenge = () => {
+    const operations = [
+      { type: '+', min: 5, max: 50 },
+      { type: '-', min: 5, max: 50 },
+      { type: '×', min: 2, max: 12 },
+      { type: '÷', min: 2, max: 10 }
+    ];
     
-    <script>
-        const e = React.createElement;
-        const { useState, useEffect, useCallback } = React;
+    const op = operations[Math.floor(Math.random() * operations.length)];
+    let a, b, result;
+    
+    if (op.type === '÷') {
+      b = Math.floor(Math.random() * (op.max - op.min + 1)) + op.min;
+      result = Math.floor(Math.random() * 10) + 1;
+      a = b * result;
+    } else {
+      a = Math.floor(Math.random() * (op.max - op.min + 1)) + op.min;
+      b = Math.floor(Math.random() * (op.max - op.min + 1)) + op.min;
+      
+      if (op.type === '+') result = a + b;
+      else if (op.type === '-') {
+        if (a < b) [a, b] = [b, a];
+        result = a - b;
+      }
+      else if (op.type === '×') result = a * b;
+    }
+    
+    return {
+      type: CHALLENGE_TYPES.MATH,
+      question: `${a} ${op.type} ${b}`,
+      answer: result,
+      points: op.type === '×' || op.type === '÷' ? 15 : 10
+    };
+  };
 
-        const GAME_KEY = 'MathGameSessionState'; 
-        const LOCAL_KEY = 'MathGameLocalState'; 
+  const generateSequenceChallenge = () => {
+    const patterns = [
+      { seq: [2, 4, 6, 8], next: 10, desc: '2, 4, 6, 8, ?' },
+      { seq: [1, 3, 5, 7], next: 9, desc: '1, 3, 5, 7, ?' },
+      { seq: [5, 10, 15, 20], next: 25, desc: '5, 10, 15, 20, ?' },
+      { seq: [10, 20, 30, 40], next: 50, desc: '10, 20, 30, 40, ?' },
+      { seq: [3, 6, 9, 12], next: 15, desc: '3, 6, 9, 12, ?' },
+      { seq: [2, 4, 8, 16], next: 32, desc: '2, 4, 8, 16, ?' },
+      { seq: [100, 90, 80, 70], next: 60, desc: '100, 90, 80, 70, ?' }
+    ];
+    
+    const pattern = patterns[Math.floor(Math.random() * patterns.length)];
+    
+    return {
+      type: CHALLENGE_TYPES.SEQUENCE,
+      question: `¿Qué número sigue? ${pattern.desc}`,
+      answer: pattern.next,
+      points: 20
+    };
+  };
 
-        // Función para obtener el estado del localStorage
-        const getInitialState = (key, defaultState) => {
-            try {
-                const stored = localStorage.getItem(key);
-                return stored ? JSON.parse(stored) : defaultState;
-            } catch (error) {
-                console.error(`Error leyendo ${key}:`, error);
-                return defaultState;
-            }
-        };
+  const generateVisualChallenge = () => {
+    const challenges = [
+      {
+        question: '🔴🔴🔵🔴🔴🔵🔴🔴 ¿Qué sigue?',
+        options: ['🔵', '🔴', '🟢', '🟡'],
+        answer: '🔵',
+        correctIndex: 0
+      },
+      {
+        question: '⭐⭐⭐🌙⭐⭐⭐🌙 ¿Qué sigue?',
+        options: ['🌙', '⭐', '☀️', '🌟'],
+        answer: '⭐',
+        correctIndex: 1
+      },
+      {
+        question: '🟥🟦🟦🟥🟦🟦 ¿Qué sigue?',
+        options: ['🟦', '🟥', '🟩', '🟨'],
+        answer: '🟥',
+        correctIndex: 1
+      },
+      {
+        question: '1️⃣2️⃣2️⃣3️⃣3️⃣3️⃣ ¿Qué sigue?',
+        options: ['1️⃣', '2️⃣', '3️⃣', '4️⃣'],
+        answer: '4️⃣',
+        correctIndex: 3
+      },
+      {
+        question: '🌕🌗🌑🌕🌗🌑 ¿Qué sigue?',
+        options: ['🌕', '🌗', '🌑', '🌘'],
+        answer: '🌕',
+        correctIndex: 0
+      }
+    ];
+    
+    const challenge = challenges[Math.floor(Math.random() * challenges.length)];
+    
+    return {
+      type: CHALLENGE_TYPES.VISUAL,
+      question: challenge.question,
+      options: challenge.options,
+      answer: challenge.answer,
+      correctIndex: challenge.correctIndex,
+      points: 25
+    };
+  };
 
-        /**
-         * Hook personalizado para gestionar el estado global y local.
-         */
-        const useLocalStorageSync = (initialUrlMode) => {
-            
-            const globalState = getInitialState(GAME_KEY, {});
-            const localState = getInitialState(LOCAL_KEY, {});
+  const startNewChallenge = () => {
+    const rand = Math.random();
+    let challenge;
+    
+    if (rand < 0.4) {
+      challenge = generateMathChallenge();
+    } else if (rand < 0.7) {
+      challenge = generateSequenceChallenge();
+    } else {
+      challenge = generateVisualChallenge();
+    }
+    
+    setCurrentChallenge(challenge);
+    setAnswer('');
+    setFeedback('');
+    setTimeLeft(TIME_LIMITS[challenge.type]);
+    setIsActive(true);
+  };
 
-            // Lógica para determinar el modo inicial del DISPOSITIVO
-            const determineInitialMode = (gState, lState, urlMode) => {
-                // 1. Si la URL es de Profesor, siempre vamos al menú.
-                if (urlMode === 'profesorMenu') return 'profesorMenu';
-                
-                // 2. Si el juego ya está iniciado globalmente.
-                if (gState.mode === 'profesorPlaying') {
-                    // Si el alumno tiene un equipo, va a jugar.
-                    if (lState.teamId !== null) return 'alumnoPlaying';
-                    // Si el alumno no tiene equipo, va a seleccionar.
-                    return 'selectTeam'; 
+  const handleTimeOut = () => {
+    setFeedback('⏱️ ¡Tiempo agotado! Siguiente pregunta...');
+    setTimeout(() => {
+      startNewChallenge();
+    }, 2000);
+  };
+
+  const checkAnswer = async () => {
+    if (!answer && currentChallenge.type !== CHALLENGE_TYPES.VISUAL) {
+      setFeedback('Por favor, introduce una respuesta');
+      return;
+    }
+
+    setIsActive(false);
+
+    const isCorrect = currentChallenge.type === CHALLENGE_TYPES.VISUAL
+      ? answer === currentChallenge.answer
+      : parseInt(answer) === currentChallenge.answer;
+
+    if (isCorrect) {
+      const bonusPoints = timeLeft > TIME_LIMITS[currentChallenge.type] * 0.7 ? 5 : 0;
+      const totalPoints = currentChallenge.points + bonusPoints;
+      await updateScore(selectedTeam.id, totalPoints);
+      setFeedback(`¡CORRECTO! +${totalPoints} puntos ${bonusPoints > 0 ? '🚀 ¡Bonus velocidad!' : '🎉'}`);
+      setTimeout(() => {
+        startNewChallenge();
+      }, 2000);
+    } else {
+      setFeedback('❌ Incorrecto. ¡Inténtalo de nuevo! 💪');
+      setTimeout(() => setFeedback(''), 2000);
+      setTimeLeft(TIME_LIMITS[currentChallenge.type]);
+      setIsActive(true);
+    }
+  };
+
+  const getTimeColor = () => {
+    const percentage = (timeLeft / TIME_LIMITS[currentChallenge?.type]) * 100;
+    if (percentage > 60) return 'text-green-400';
+    if (percentage > 30) return 'text-yellow-400';
+    return 'text-red-400';
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center">
+        <div className="text-white text-2xl">Cargando...</div>
+      </div>
+    );
+  }
+
+  // VISTA DE SELECCIÓN
+  if (view === 'select') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-600 p-4">
+        <div className="max-w-4xl mx-auto pt-12">
+          <div className="text-center mb-12">
+            <h1 className="text-5xl font-bold text-white mb-4">🏆 Competición Matemática 🏆</h1>
+            <p className="text-xl text-blue-100">Elige tu opción</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <button
+              onClick={() => setView('team-select')}
+              className="bg-white rounded-2xl p-8 shadow-2xl hover:scale-105 transition-transform"
+            >
+              <Users className="w-16 h-16 text-blue-600 mx-auto mb-4" />
+              <h2 className="text-3xl font-bold text-gray-800 mb-2">Jugar</h2>
+              <p className="text-gray-600">Selecciona tu equipo y empieza a competir</p>
+            </button>
+
+            <button
+              onClick={() => setView('display')}
+              className="bg-white rounded-2xl p-8 shadow-2xl hover:scale-105 transition-transform"
+            >
+              <Trophy className="w-16 h-16 text-yellow-600 mx-auto mb-4" />
+              <h2 className="text-3xl font-bold text-gray-800 mb-2">Pantalla Grande</h2>
+              <p className="text-gray-600">Ver clasificación en la PDI</p>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // VISTA DE SELECCIÓN DE EQUIPO
+  if (view === 'team-select') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-600 p-4">
+        <div className="max-w-4xl mx-auto pt-8">
+          <button
+            onClick={() => setView('select')}
+            className="mb-6 text-white text-lg hover:underline"
+          >
+            ← Volver
+          </button>
+
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-white mb-4">Selecciona tu Equipo</h1>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {TEAMS.map(team => (
+              <button
+                key={team.id}
+                onClick={() => {
+                  setSelectedTeam(team);
+                  setView('game');
+                  startNewChallenge();
+                }}
+                className={`${team.color} rounded-2xl p-6 shadow-2xl hover:scale-105 transition-transform`}
+              >
+                <div className="text-white text-center">
+                  <Users className="w-12 h-12 mx-auto mb-3" />
+                  <h2 className="text-2xl font-bold mb-2">{team.name}</h2>
+                  <p className="text-xl font-semibold">{scores[team.id] || 0} puntos</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // VISTA DE JUEGO
+  if (view === 'game' && selectedTeam && currentChallenge) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-600 p-4">
+        <div className="max-w-2xl mx-auto pt-4">
+          <button
+            onClick={() => {
+              setView('team-select');
+              setIsActive(false);
+            }}
+            className="mb-4 text-white text-lg hover:underline"
+          >
+            ← Cambiar equipo
+          </button>
+
+          <div className={`${selectedTeam.color} rounded-2xl p-6 shadow-2xl mb-6`}>
+            <div className="flex items-center justify-between text-white">
+              <div>
+                <h2 className="text-2xl font-bold">{selectedTeam.name}</h2>
+                <p className="text-xl">Puntuación: {scores[selectedTeam.id] || 0}</p>
+              </div>
+              <Trophy className="w-12 h-12" />
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl p-8 shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2">
+                {currentChallenge.type === CHALLENGE_TYPES.MATH && <Calculator className="w-8 h-8 text-blue-600" />}
+                {currentChallenge.type === CHALLENGE_TYPES.SEQUENCE && <Target className="w-8 h-8 text-green-600" />}
+                {currentChallenge.type === CHALLENGE_TYPES.VISUAL && <Brain className="w-8 h-8 text-purple-600" />}
+                <span className="text-sm font-semibold text-gray-600 uppercase">
+                  {currentChallenge.type === CHALLENGE_TYPES.MATH && 'Matemáticas'}
+                  {currentChallenge.type === CHALLENGE_TYPES.SEQUENCE && 'Secuencias'}
+                  {currentChallenge.type === CHALLENGE_TYPES.VISUAL && 'Lógica Visual'}
+                </span>
+              </div>
+              <div className={`flex items-center gap-2 ${getTimeColor()} font-bold text-2xl`}>
+                <Clock className="w-8 h-8" />
+                <span>{timeLeft}s</span>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <h3 className="text-3xl font-bold text-gray-800 text-center mb-4">
+                {currentChallenge.question}
+              </h3>
+              <div className="text-center text-lg text-gray-600">
+                Vale {currentChallenge.points} puntos
+              </div>
+            </div>
+
+            {currentChallenge.type === CHALLENGE_TYPES.VISUAL ? (
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                {currentChallenge.options.map((option, index) => (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      setAnswer(option);
+                      setTimeout(() => checkAnswer(), 100);
+                    }}
+                    className={`p-8 text-6xl rounded-xl border-4 transition-all ${
+                      answer === option
+                        ? 'border-blue-500 bg-blue-50 scale-95'
+                        : 'border-gray-300 hover:border-blue-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="mb-6">
+                <input
+                  type="number"
+                  value={answer}
+                  onChange={(e) => setAnswer(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && checkAnswer()}
+                  className="w-full p-4 text-3xl text-center border-4 border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
+                  placeholder="Tu respuesta"
+                  autoFocus
+                />
+              </div>
+            )}
+
+            {currentChallenge.type !== CHALLENGE_TYPES.VISUAL && (
+              <button
+                onClick={checkAnswer}
+                disabled={!answer}
+                className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-4 rounded-xl text-2xl font-bold hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+              >
+                Comprobar Respuesta
+              </button>
+            )}
+
+            {feedback && (
+              <div className={`mt-6 p-4 rounded-xl text-center text-xl font-bold ${
+                feedback.includes('CORRECTO') || feedback.includes('Bonus')
+                  ? 'bg-green-100 text-green-800'
+                  : feedback.includes('Tiempo')
+                  ? 'bg-orange-100 text-orange-800'
+                  : 'bg-red-100 text-red-800'
+              }`}>
+                {feedback}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // VISTA DE PANTALLA GRANDE (PDI)
+  if (view === 'display') {
+    const sortedTeams = TEAMS.sort((a, b) => (scores[b.id] || 0) - (scores[a.id] || 0));
+    
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-12">
+            <h1 className="text-7xl font-bold text-white mb-4 flex items-center justify-center gap-4">
+              <Trophy className="w-20 h-20 text-yellow-400" />
+              Competición Matemática
+              <Trophy className="w-20 h-20 text-yellow-400" />
+            </h1>
+            <p className="text-3xl text-blue-200">Clasificación en Tiempo Real</p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 mb-8">
+            {sortedTeams.map((team, index) => (
+              <div
+                key={team.id}
+                className={`${team.color} rounded-3xl p-8 shadow-2xl transform hover:scale-105 transition-transform`}
+              >
+                <div className="flex items-center justify-between text-white">
+                  <div className="flex items-center gap-6">
+                    <div className="text-6xl font-bold bg-white bg-opacity-20 rounded-full w-20 h-20 flex items-center justify-center">
+                      {index + 1}
+                    </div>
+                    <div>
+                      <h3 className="text-4xl font-bold">{team.name}</h3>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-6xl font-bold">{scores[team.id] || 0}</div>
+                    <div className="text-2xl opacity-90">puntos</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="text-center">
+            <button
+              onClick={() => {
+                if (window.confirm('¿Reiniciar todas las puntuaciones?')) {
+                  resetScores();
                 }
+              }}
+              className="bg-red-500 hover:bg-red-600 text-white px-8 py-4 rounded-xl text-xl font-bold shadow-lg transition-colors"
+            >
+              Reiniciar Puntuaciones
+            </button>
+            <button
+              onClick={() => setView('select')}
+              className="ml-4 bg-gray-500 hover:bg-gray-600 text-white px-8 py-4 rounded-xl text-xl font-bold shadow-lg transition-colors"
+            >
+              Volver al Menú
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-                // 3. Si el juego no ha iniciado, usamos el modo local (selectTeam, selectMode)
-                return lState.mode || urlMode;
-            };
+  return null;
+};
 
-            const [state, setState] = useState(() => ({
-                mode: determineInitialMode(globalState, localState, initialUrlMode),
-                // 🐛 CORRECCIÓN CRÍTICA: Aseguramos que 'teams' sea un array por defecto
-                teams: globalState.teams || [], 
-                difficulty: globalState.difficulty || 'media',
-                currentQuestion: globalState.currentQuestion || null,
-                // 🐛 CORRECCIÓN CRÍTICA: Aseguramos que 'teamAnswers' sea un objeto vacío
-                teamAnswers: globalState.teamAnswers || {}, 
-                showResults: globalState.showResults || false,
-                questionNumber: globalState.questionNumber || 1,
-                timeLeft: globalState.timeLeft || 20,
-                totalQuestions: globalState.totalQuestions || 10,
-                numTeams: globalState.numTeams || 3,
-                
-                teamId: localState.teamId || null, 
-                alumnoRespuesta: localState.alumnoRespuesta || null
-            }));
-
-            // Función para actualizar el estado y guardarlo en localStorage
-            const updateState = (newState) => {
-                setState(prevState => {
-                    const updatedState = { ...prevState, ...newState };
-                    
-                    // 1. Guardar estado compartido (Global)
-                    const sharedState = {
-                        mode: updatedState.mode,
-                        teams: updatedState.teams,
-                        difficulty: updatedState.difficulty,
-                        currentQuestion: updatedState.currentQuestion,
-                        teamAnswers: updatedState.teamAnswers,
-                        showResults: updatedState.showResults,
-                        questionNumber: updatedState.questionNumber,
-                        timeLeft: updatedState.timeLeft,
-                        totalQuestions: updatedState.totalQuestions,
-                        numTeams: updatedState.numTeams,
-                    };
-                    localStorage.setItem(GAME_KEY, JSON.stringify(sharedState));
-
-                    // 2. Guardar estado local (Equipo y Modo)
-                    const newLocalState = {
-                        mode: updatedState.mode, 
-                        teamId: updatedState.teamId,
-                        alumnoRespuesta: updatedState.alumnoRespuesta 
-                    };
-                    localStorage.setItem(LOCAL_KEY, JSON.stringify(newLocalState));
-
-                    return updatedState;
-                });
-            };
-
-            // Efecto para escuchar cambios globales (GAME_KEY) desde OTRAS pestañas
-            useEffect(() => {
-                const handleStorageChange = (event) => {
-                    if (event.key === GAME_KEY && event.newValue) {
-                        const newState = JSON.parse(event.newValue);
-                        setState(prevState => {
-                            let newMode = prevState.mode;
-                            if (newState.mode === 'profesorPlaying' && prevState.teamId !== null) {
-                                newMode = 'alumnoPlaying';
-                            } else if (newState.mode === 'profesorPlaying' && prevState.teamId === null) {
-                                newMode = 'selectTeam';
-                            } else if (newState.mode === 'selectMode') {
-                                newMode = 'selectMode'; 
-                            } else if (newState.mode === 'profesorMenu') {
-                                newMode = 'profesorMenu';
-                            }
-                            
-                            // 🐛 CORRECCIÓN: Aseguramos que los valores sean seguros antes de usarlos
-                            const newTeams = newState.teams || []; 
-                            const newTeamAnswers = newState.teamAnswers || {};
-
-
-                            return {
-                                ...prevState,
-                                mode: newMode,
-                                teams: newTeams,
-                                currentQuestion: newState.currentQuestion,
-                                teamAnswers: newTeamAnswers,
-                                showResults: newState.showResults,
-                                questionNumber: newState.questionNumber,
-                                timeLeft: newState.timeLeft,
-                                totalQuestions: newState.totalQuestions,
-                                numTeams: newState.numTeams,
-                                
-                                alumnoRespuesta: newState.currentQuestion === prevState.currentQuestion ? prevState.alumnoRespuesta : null
-                            };
-                        });
-                    }
-                    if (event.key === GAME_KEY && event.newValue === null) {
-                         setState(prevState => ({ ...prevState, mode: 'selectMode' }));
-                    }
-                };
-
-                window.addEventListener('storage', handleStorageChange);
-                return () => window.removeEventListener('storage', handleStorageChange);
-            }, []);
-
-            return [state, updateState];
-        };
-
-        // --- Componente principal MathGame y el resto de funciones... ---
-        function MathGame() {
-            
-            const getUrlMode = () => {
-                const params = new URLSearchParams(window.location.search);
-                const role = params.get('r');
-                if (role === 'profesor') return 'profesorMenu';
-                if (role === 'alumno') return 'selectTeam'; 
-                return 'selectMode';
-            };
-
-            const initialMode = getUrlMode();
-            const [state, updateState] = useLocalStorageSync(initialMode);
-            const { 
-                mode, teams, numTeams, difficulty, currentQuestion, 
-                teamAnswers, showResults, questionNumber, timeLeft, 
-                totalQuestions, teamId, alumnoRespuesta 
-            } = state;
-
-
-            // Efecto para gestionar el temporizador (Solo para Profesor)
-            useEffect(() => {
-                if (mode === 'profesorPlaying' && !showResults && timeLeft > 0) {
-                    const timer = setTimeout(() => {
-                        updateState({ timeLeft: timeLeft - 1 });
-                    }, 1000);
-                    return () => clearTimeout(timer);
-                }
-                if (timeLeft === 0 && !showResults && mode === 'profesorPlaying') {
-                    updateState({ showResults: true });
-                }
-            }, [timeLeft, mode, showResults, updateState]);
-
-            // --- LÓGICA DEL JUEGO (Preguntas) ---
-
-            const generateCalculoQuestion = useCallback(() => {
-                let a = Math.floor(Math.random() * (difficulty === 'facil' ? 20 : difficulty === 'media' ? 50 : 100)) + 1;
-                let b = Math.floor(Math.random() * (difficulty === 'facil' ? 20 : difficulty === 'media' ? 50 : 100)) + 1;
-                const operations = ['+', '-', '×', '÷'];
-                const op = operations[Math.floor(Math.random() * operations.length)];
-                
-                let answer;
-                if (op === '+') answer = a + b;
-                else if (op === '-') { 
-                    answer = Math.abs(a - b); 
-                    if (a < b) [a, b] = [b, a]; 
-                }
-                else if (op === '×') answer = a * b;
-                else { 
-                    const divisor = b || 1;
-                    const result = Math.floor(a / divisor);
-                    a = result * divisor;
-                    answer = result;
-                }
-
-                const options = [answer];
-                while (options.length < 4) {
-                    const wrong = answer + (Math.random() > 0.5 ? 1 : -1) * (Math.floor(Math.random() * (difficulty === 'facil' ? 5 : 10)) + 1);
-                    if (!options.includes(wrong) && wrong > 0) options.push(wrong);
-                }
-
-                return { type: 'calculo', question: `${a} ${op} ${b}`, answer, options: options.sort(() => Math.random() - 0.5), icon: '🧮' };
-            }, [difficulty]);
-
-            const generateLogicQuestion = useCallback(() => {
-                const questions = [
-                    { question: 'Si 2+2=5, 3+3=7, 4+4=?', answer: 9, options: [8, 9, 10, 11], hint: 'Mira el patrón' },
-                    { question: 'Un caracol sube 3m de día y baja 2m de noche. ¿Cuántos días tarda en subir 10m?', answer: 8, options: [8, 9, 10, 12], hint: 'Piensa en el último día' },
-                    { question: '¿Cuántas veces cabe el número 1 en el número 11?', answer: 2, options: [1, 2, 3, 11], hint: 'Cuenta con cuidado' },
-                    { question: 'Si un cuadrado tiene 4 lados, ¿cuántos lados tiene el ángulo de un cuadrado?', answer: 0, options: [0, 1, 2, 4], hint: 'Un ángulo no es una forma' },
-                    { question: 'Juan tiene 5 manzanas. Da 2 a María. ¿Cuántas le quedan?', answer: 3, options: [1, 2, 3, 5], hint: 'Resta simple' },
-                    { question: '¿Cuál es el siguiente número? 2, 4, 8, 16, ?', answer: 32, options: [24, 28, 32, 64], hint: 'Se multiplica por 2' }
-                ];
-                const q = questions[Math.floor(Math.random() * questions.length)];
-                return { type: 'logica', ...q, icon: '🧩' };
-            }, []);
-
-            const generateQuestion = useCallback(() => questionNumber % 2 === 1 ? generateCalculoQuestion() : generateLogicQuestion(), [questionNumber, generateCalculoQuestion, generateLogicQuestion]);
-
-
-            // --- CONTROL DEL JUEGO ---
-
-            const initGame = () => {
-                const newTeams = Array(numTeams).fill(0).map((_, i) => ({ id: i, name: `Equipo ${i + 1}`, score: 0 }));
-                updateState({
-                    teams: newTeams,
-                    teamAnswers: {},
-                    questionNumber: 1,
-                    currentQuestion: generateQuestion(),
-                    timeLeft: 20,
-                    showResults: false,
-                    mode: 'profesorPlaying'
-                });
-            };
-
-            const setNumTeamsLocal = (count) => updateState({ numTeams: count });
-            const setDifficultyLocal = (level) => updateState({ difficulty: level });
-            const setTotalQuestionsLocal = (count) => updateState({ totalQuestions: count });
-
-            const selectAndJoinTeam = (id) => {
-                updateState({ teamId: id, mode: 'alumnoPlaying' }); 
-            };
-
-            const handleAlumnoAnswer = (option) => updateState({ alumnoRespuesta: option });
-
-            const enviarRespuesta = () => {
-                if (alumnoRespuesta !== null) {
-                    updateState({ 
-                        teamAnswers: { ...teamAnswers, [teamId]: alumnoRespuesta },
-                        alumnoRespuesta: null 
-                    }); 
-                }
-            };
-
-            const nextQuestion = () => {
-                const newTeams = teams.map(team => {
-                    const teamAnswer = teamAnswers[team.id];
-                    if (teamAnswer === currentQuestion.answer) {
-                        const points = difficulty === 'facil' ? 10 : difficulty === 'media' ? 20 : 30;
-                        return { ...team, score: team.score + points };
-                    }
-                    return team;
-                });
-                
-                if (questionNumber >= totalQuestions) {
-                    updateState({ mode: 'resultados', teams: newTeams });
-                } else {
-                    updateState({
-                        teams: newTeams,
-                        teamAnswers: {},
-                        questionNumber: questionNumber + 1,
-                        currentQuestion: generateQuestion(),
-                        timeLeft: 20,
-                        showResults: false,
-                        alumnoRespuesta: null, 
-                    });
-                }
-            };
-
-            const salir = () => {
-                // Limpiar TODAS las claves al salir
-                localStorage.removeItem(GAME_KEY);
-                localStorage.removeItem(LOCAL_KEY);
-                updateState({
-                    mode: 'selectMode',
-                    teams: [],
-                    teamAnswers: {},
-                    questionNumber: 1,
-                    teamId: null,
-                    alumnoRespuesta: null,
-                    currentQuestion: null,
-                });
-                window.history.pushState({}, '', window.location.pathname);
-            };
-
-            const generateRoleUrl = (role) => {
-                const baseURL = window.location.origin + window.location.pathname;
-                return `${baseURL}?r=${role}`;
-            };
-
-            const copyToClipboard = (text) => {
-                navigator.clipboard.writeText(text).then(() => {
-                    alert('URL copiada al portapapeles.');
-                }).catch(err => {
-                    console.error('Error al copiar: ', err);
-                });
-            };
-            
-            // --- VISTAS DEL JUEGO ---
-
-            // PANTALLA INICIAL (Acceso por URLs)
-            if (mode === 'selectMode') {
-                const urlProfesor = generateRoleUrl('profesor');
-                const urlAlumno = generateRoleUrl('alumno');
-
-                return e('div', { className: 'min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-
+export default App;
