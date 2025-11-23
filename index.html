@@ -44,27 +44,30 @@
             const [teamId, setTeamId] = useState(null);
             const [alumnoRespuesta, setAlumnoRespuesta] = useState(null);
 
+            // Efecto para gestionar el temporizador
             useEffect(() => {
-                if (gamePin === '') {
-                    setGamePin(Math.random().toString(36).substring(2, 8).toUpperCase());
-                }
-            }, [gamePin]);
-
-            useEffect(() => {
-                if (gamePin === '') {
-                    setGamePin(Math.random().toString(36).substring(2, 8).toUpperCase());
-                }
-            }, [gamePin]);
-
-            useEffect(() => {
-                if ((mode === 'profesorPlaying' || mode === 'alumnoPlaying') && !showResults && timeLeft > 0) {
+                if ((mode === 'profesorPlaying') && !showResults && timeLeft > 0) {
                     const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
                     return () => clearTimeout(timer);
                 }
-                if (timeLeft === 0 && !showResults && (mode === 'profesorPlaying' || mode === 'alumnoPlaying')) {
+                if (timeLeft === 0 && !showResults && mode === 'profesorPlaying') {
                     setShowResults(true);
                 }
             }, [timeLeft, mode, showResults]);
+
+            // **NUEVO Efecto para simular la "sincronización" del alumno**
+            // Si el alumno está esperando y el profesor establece una pregunta, el alumno comienza a jugar.
+            useEffect(() => {
+                if (mode === 'esperandoPartida' && currentQuestion) {
+                    // Asignar al primer equipo disponible de forma simulada
+                    const teamIndex = teams.length > 0 ? 0 : null; // Siempre se asigna al Equipo 1 (0)
+                    if (teamIndex !== null) {
+                        setTeamId(teamIndex);
+                        setMode('alumnoPlaying');
+                    }
+                }
+            }, [mode, currentQuestion, teams.length]);
+            // **FIN NUEVO Efecto**
 
             const generateCalculoQuestion = () => {
                 let a = Math.floor(Math.random() * (difficulty === 'facil' ? 20 : difficulty === 'media' ? 50 : 100)) + 1;
@@ -74,13 +77,23 @@
                 
                 let answer;
                 if (op === '+') answer = a + b;
-                else if (op === '-') { answer = Math.abs(a - b); if (a < b) [a, b] = [b, a]; }
+                else if (op === '-') { 
+                    answer = Math.abs(a - b); 
+                    if (a < b) [a, b] = [b, a]; 
+                }
                 else if (op === '×') answer = a * b;
-                else { answer = Math.floor(a / (b || 1)); a = answer * (b || 1) + Math.floor(Math.random() * (b || 1)); }
+                else { 
+                    // Asegurar que la división sea de números enteros y generar el dividendo
+                    const divisor = b || 1;
+                    const result = Math.floor(a / divisor);
+                    a = result * divisor;
+                    answer = result;
+                    // Se simplificó la generación para evitar bucles o números complejos
+                }
 
                 const options = [answer];
                 while (options.length < 4) {
-                    const wrong = answer + (Math.random() > 0.5 ? 1 : -1) * (Math.floor(Math.random() * 10) + 1);
+                    const wrong = answer + (Math.random() > 0.5 ? 1 : -1) * (Math.floor(Math.random() * (difficulty === 'facil' ? 5 : 10)) + 1);
                     if (!options.includes(wrong) && wrong > 0) options.push(wrong);
                 }
 
@@ -116,8 +129,8 @@
 
             const unirAlEquipo = () => {
                 if (inputPin.toUpperCase() === gamePin) {
-                    setTeamId(0);
-                    setMode('alumnoPlaying');
+                    // **CORRECCIÓN CLAVE:** El alumno entra en modo de espera
+                    setMode('esperandoPartida');
                 } else {
                     alert('PIN incorrecto');
                     setInputPin('');
@@ -128,8 +141,12 @@
 
             const enviarRespuesta = () => {
                 if (alumnoRespuesta !== null) {
-                    setTeamAnswers(prev => ({ ...prev, [teamId]: alumnoRespuesta }));
-                    setAlumnoRespuesta(null);
+                    // Enviar la respuesta solo si la partida está en modo de juego
+                    if (mode === 'alumnoPlaying') {
+                        setTeamAnswers(prev => ({ ...prev, [teamId]: alumnoRespuesta }));
+                        setAlumnoRespuesta(null);
+                        // El alumno se queda esperando los resultados y la siguiente pregunta.
+                    }
                 }
             };
 
@@ -161,9 +178,9 @@
                 setQuestionNumber(1);
                 setTeamId(null);
                 setAlumnoRespuesta(null);
+                setCurrentQuestion(null); // Reiniciar pregunta también
                 const newPin = Math.random().toString(36).substring(2, 8).toUpperCase();
                 setGamePin(newPin);
-                localStorage.setItem('mathgame_pin', newPin);
             };
 
             const generateQRSvg = () => `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(window.location.href)}`;
@@ -178,186 +195,4 @@
             // PANTALLA INICIAL
             if (mode === 'selectMode') {
                 return e('div', { className: 'min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4' },
-                    e('div', { className: 'bg-white rounded-lg shadow-2xl p-8 max-w-md w-full' },
-                        e('h1', { className: 'text-4xl font-bold text-center mb-2 text-gray-800' }, 'MathGame'),
-                        e('p', { className: 'text-center text-gray-600 mb-8' }, '¡Cálculo, lógica y acertijos! Todos juegan a la vez'),
-                        e('div', { className: 'space-y-4 mb-8' },
-                            e('button', { onClick: () => setMode('profesorMenu'), className: 'w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-4 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition' }, '📺 Soy Profesorado'),
-                            e('button', { onClick: () => setMode('alumnoMenu'), className: 'w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition' }, '📱 Soy Alumnado')
-                        ),
-                        e('div', { className: 'border-t-2 border-gray-300 pt-6' },
-                            e('p', { className: 'text-center text-sm text-gray-600 mb-4' }, '📱 QR para compartir con los alumnos'),
-                            e('div', { className: 'flex flex-col items-center gap-4' },
-                                e('img', { src: generateQRSvg(), alt: 'MathGame QR', className: 'w-32 h-32 border-2 border-gray-300 p-2 bg-white rounded' }),
-                                e('button', { onClick: descargarQR, className: 'bg-gradient-to-r from-purple-500 to-purple-600 text-white py-2 px-4 rounded-lg font-semibold text-sm' }, '⬇️ Descargar QR'),
-                                e('p', { className: 'text-xs text-gray-500 text-center' }, 'Guarda este QR para que los alumnos lo escaneen')
-                            )
-                        )
-                    )
-                );
-            }
-
-            // MENÚ PROFESOR
-            if (mode === 'profesorMenu') {
-                return e('div', { className: 'min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4' },
-                    e('div', { className: 'bg-white rounded-lg shadow-2xl p-8 max-w-md w-full' },
-                        e('h1', { className: 'text-3xl font-bold text-center mb-6 text-gray-800' }, 'Configuración Profesorado'),
-                        e('div', { className: 'bg-yellow-100 border-4 border-yellow-400 p-4 rounded-lg mb-6 text-center' },
-                            e('p', { className: 'text-sm text-gray-600' }, 'Código de sesión'),
-                            e('p', { className: 'text-4xl font-bold text-yellow-600' }, gamePin),
-                            e('p', { className: 'text-xs text-gray-600 mt-2' }, 'Comparte este PIN con tus alumnos')
-                        ),
-                        e('div', { className: 'space-y-6' },
-                            e('div', null,
-                                e('label', { className: 'block text-sm font-semibold text-gray-700 mb-2' }, `Número de equipos: ${numTeams}`),
-                                e('input', { type: 'range', min: '2', max: '6', value: numTeams, onChange: (evt) => setNumTeams(parseInt(evt.target.value)), className: 'w-full h-2 bg-gray-300 rounded-lg' })
-                            ),
-                            e('div', null,
-                                e('label', { className: 'block text-sm font-semibold text-gray-700 mb-2' }, 'Dificultad:'),
-                                e('div', { className: 'space-y-2' },
-                                    ['facil', 'media', 'dificil'].map(level => e('button', { key: level, onClick: () => setDifficulty(level), className: `w-full py-2 px-4 rounded-lg font-semibold transition ${difficulty === level ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}` }, level === 'facil' ? 'Fácil' : level === 'media' ? 'Media' : 'Difícil'))
-                                )
-                            ),
-                            e('div', null,
-                                e('label', { className: 'block text-sm font-semibold text-gray-700 mb-2' }, `Número de preguntas: ${totalQuestions}`),
-                                e('input', { type: 'range', min: '5', max: '30', step: '5', value: totalQuestions, onChange: (evt) => setTotalQuestions(parseInt(evt.target.value)), className: 'w-full h-2 bg-gray-300 rounded-lg' })
-                            ),
-                            e('button', { onClick: initGame, className: 'w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-3 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition' }, '▶️ Comenzar Juego'),
-                            e('button', { onClick: salir, className: 'w-full bg-gray-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-gray-600 transition' }, 'Volver')
-                        )
-                    )
-                );
-            }
-
-            // MENÚ ALUMNO
-            if (mode === 'alumnoMenu') {
-                return e('div', { className: 'min-h-screen bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center p-4' },
-                    e('div', { className: 'bg-white rounded-lg shadow-2xl p-8 max-w-md w-full' },
-                        e('h1', { className: 'text-3xl font-bold text-center mb-6 text-gray-800' }, 'Unirse a la partida'),
-                        e('div', { className: 'space-y-6' },
-                            e('div', null,
-                                e('label', { className: 'block text-sm font-semibold text-gray-700 mb-2' }, 'Código PIN de la sesión:'),
-                                e('input', { type: 'text', value: inputPin, onChange: (evt) => setInputPin(evt.target.value.toUpperCase()), placeholder: 'Ej: ABC123', maxLength: '6', className: 'w-full p-3 border-2 border-gray-300 rounded-lg text-center text-3xl font-bold tracking-widest' })
-                            ),
-                            e('button', { onClick: unirAlEquipo, className: 'w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-3 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition' }, '▶️ Unirse'),
-                            e('button', { onClick: () => setMode('selectMode'), className: 'w-full bg-gray-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-gray-600 transition' }, 'Volver')
-                        )
-                    )
-                );
-            }
-
-            // PROFESOR JUGANDO
-            if (mode === 'profesorPlaying') {
-                const isLogic = currentQuestion?.type === 'logica';
-                return e('div', { className: 'min-h-screen bg-gradient-to-br from-indigo-500 to-pink-500 flex items-center justify-center p-4' },
-                    e('div', { className: 'bg-white rounded-lg shadow-2xl p-8 max-w-5xl w-full' },
-                        e('div', { className: 'flex justify-between items-center mb-6' },
-                            e('div', { className: 'text-center' },
-                                e('p', { className: 'text-sm font-semibold text-gray-600' }, 'Pregunta'),
-                                e('p', { className: 'text-3xl font-bold text-purple-600' }, `${questionNumber}/${totalQuestions}`)
-                            ),
-                            e('div', { className: 'text-center' },
-                                e('span', { className: 'text-3xl' }, currentQuestion?.icon),
-                                e('p', { className: 'text-sm font-semibold text-gray-600' }, isLogic ? '🧩 Lógica' : '🧮 Cálculo')
-                            ),
-                            e('div', { className: timeLeft > 10 ? 'text-green-600' : timeLeft > 5 ? 'text-yellow-600' : 'text-red-600', style: { textAlign: 'center' } },
-                                e('p', { className: 'text-4xl font-bold' }, `${timeLeft}s`)
-                            )
-                        ),
-                        e('div', { className: `rounded-lg p-8 mb-8 text-center border-4 ${isLogic ? 'bg-gradient-to-r from-purple-100 to-pink-100 border-purple-400' : 'bg-gradient-to-r from-yellow-100 to-yellow-50 border-yellow-400'}` },
-                            e('p', { className: `font-bold mb-4 ${isLogic ? 'text-2xl text-purple-800' : 'text-6xl text-gray-800'}` }, currentQuestion?.question),
-                            isLogic && e('p', { className: 'text-sm text-purple-600 italic' }, `💡 ${currentQuestion?.hint}`)
-                        ),
-                        e('div', { className: 'grid grid-cols-2 gap-4 mb-8' },
-                            currentQuestion?.options.map((option, idx) => e('button', { key: idx, disabled: true, className: `text-white p-6 rounded-lg font-bold text-3xl opacity-75 ${isLogic ? 'bg-gradient-to-br from-purple-500 to-purple-600' : 'bg-gradient-to-br from-blue-500 to-blue-600'}` }, option))
-                        ),
-                        e('div', { className: 'grid gap-3 mb-6', style: { gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' } },
-                            teams.map(team => e('div', { key: team.id, className: `p-4 rounded-lg text-center font-bold transition ${teamAnswers[team.id] ? 'bg-blue-500 text-white scale-105 border-4 border-blue-700' : 'bg-gray-300 text-gray-800'}` },
-                                e('p', { className: 'text-sm mb-1' }, team.name),
-                                e('p', { className: 'text-2xl' }, teamAnswers[team.id] || '---')
-                            ))
-                        ),
-                        showResults && e('div', { className: 'mt-8 p-4 bg-gray-100 rounded-lg border-4 border-gray-400' },
-                            e('p', { className: 'text-center font-bold text-xl mb-4' }, `✓ Respuesta correcta: ${currentQuestion?.answer}`),
-                            e('div', { className: 'grid gap-2 mb-6', style: { gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))' } },
-                                teams.map(team => {
-                                    const isCorrect = teamAnswers[team.id] === currentQuestion?.answer;
-                                    const pts = difficulty === 'facil' ? 10 : difficulty === 'media' ? 20 : 30;
-                                    return e('div', { key: team.id, className: `p-2 rounded text-center font-bold ${isCorrect ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}` },
-                                        e('p', { className: 'text-sm' }, team.name),
-                                        e('p', { className: 'text-lg' }, isCorrect ? `✓ +${pts}` : '✗')
-                                    );
-                                })
-                            ),
-                            e('div', { className: 'mb-6 p-4 bg-white rounded-lg border-2 border-gray-300' },
-                                e('p', { className: 'text-center font-bold text-gray-600 mb-3' }, 'PUNTUACIÓN ACTUAL'),
-                                e('div', { className: 'space-y-2' },
-                                    [...teams].sort((a, b) => b.score - a.score).map((team, idx) => e('div', { key: team.id, className: 'flex items-center justify-between px-3 py-2 bg-gradient-to-r from-blue-50 to-purple-50 rounded' },
-                                        e('span', { className: 'font-bold' }, `${idx + 1}. ${team.name}`),
-                                        e('span', { className: 'text-lg font-bold text-blue-600' }, `${team.score} pts`)
-                                    ))
-                                )
-                            ),
-                            e('button', { onClick: nextQuestion, className: 'w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-3 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition' }, 'Siguiente Pregunta →')
-                        ),
-                        e('button', { onClick: salir, className: 'mt-4 w-full bg-red-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-red-600 transition' }, 'Salir')
-                    )
-                );
-            }
-
-            // ALUMNO JUGANDO
-            if (mode === 'alumnoPlaying') {
-                const isLogic = currentQuestion?.type === 'logica';
-                return e('div', { className: 'min-h-screen bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center p-4' },
-                    e('div', { className: 'bg-white rounded-lg shadow-2xl p-8 max-w-2xl w-full' },
-                        e('div', { className: 'flex justify-between items-center mb-6' },
-                            e('div', { className: 'text-center flex-1' },
-                                e('p', { className: 'text-sm font-semibold text-gray-600' }, 'Pregunta'),
-                                e('p', { className: 'text-3xl font-bold text-green-600' }, `${questionNumber}/${totalQuestions}`)
-                            ),
-                            e('div', { className: 'text-center flex-1' },
-                                e('span', { className: 'text-3xl' }, currentQuestion?.icon),
-                                e('p', { className: 'text-sm font-semibold text-gray-600' }, isLogic ? '🧩 Lógica' : '🧮 Cálculo')
-                            ),
-                            e('div', { className: 'text-center flex-1' },
-                                e('p', { className: 'text-3xl font-bold text-red-600' }, `${timeLeft}s`)
-                            )
-                        ),
-                        e('div', { className: `rounded-lg p-8 mb-8 text-center border-4 ${isLogic ? 'bg-gradient-to-r from-purple-100 to-pink-100 border-purple-400' : 'bg-gradient-to-r from-yellow-100 to-yellow-50 border-yellow-400'}` },
-                            e('p', { className: `font-bold mb-4 ${isLogic ? 'text-2xl text-purple-800' : 'text-5xl text-gray-800'}` }, currentQuestion?.question),
-                            isLogic && e('p', { className: 'text-sm text-purple-600 italic' }, `💡 ${currentQuestion?.hint}`)
-                        ),
-                        e('div', { className: 'grid grid-cols-2 gap-4 mb-6' },
-                            currentQuestion?.options.map((option, idx) => e('button', { key: idx, onClick: () => handleAlumnoAnswer(option), className: `text-white p-6 rounded-lg font-bold text-3xl transition transform hover:scale-105 ${alumnoRespuesta === option ? 'ring-4 ring-white scale-110 ' + (isLogic ? 'bg-gradient-to-br from-purple-600 to-purple-700' : 'bg-gradient-to-br from-blue-600 to-blue-700') : isLogic ? 'bg-gradient-to-br from-purple-500 to-purple-600' : 'bg-gradient-to-br from-blue-500 to-blue-600'}` }, option))
-                        ),
-                        alumnoRespuesta !== null ? 
-                            e('button', { onClick: enviarRespuesta, className: 'w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition' }, '✓ Enviar Respuesta')
-                            : e('div', { className: 'w-full bg-gray-300 text-gray-700 py-4 px-4 rounded-lg font-bold text-lg text-center' }, 'Selecciona una respuesta')
-                    )
-                );
-            }
-
-            // RESULTADOS
-            if (mode === 'resultados') {
-                const sortedTeams = [...teams].sort((a, b) => b.score - a.score);
-                return e('div', { className: 'min-h-screen bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center p-4' },
-                    e('div', { className: 'bg-white rounded-lg shadow-2xl p-8 max-w-2xl w-full' },
-                        e('div', { className: 'text-center mb-8' },
-                            e('h1', { className: 'text-4xl font-bold text-gray-800' }, '¡RESULTADOS FINALES!')
-                        ),
-                        e('div', { className: 'space-y-4 mb-8' },
-                            sortedTeams.map((team, idx) => e('div', { key: team.id, className: `p-4 rounded-lg flex items-center justify-between font-bold text-lg ${idx === 0 ? 'bg-yellow-100 border-4 border-yellow-400' : idx === 1 ? 'bg-gray-100 border-4 border-gray-400' : 'bg-orange-100 border-4 border-orange-400'}` },
-                                e('span', null, `${idx + 1}º - ${team.name}`),
-                                e('span', { className: 'text-2xl' }, `${team.score} PUNTOS`)
-                            ))
-                        ),
-                        e('button', { onClick: salir, className: 'w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition' }, 'Volver al inicio')
-                    )
-                );
-            }
-        }
-
-        ReactDOM.createRoot(document.getElementById('root')).render(e(MathGame));
-    </script>
-</body>
-</html>
+                    e('div', { className: 'bg-white rounded
