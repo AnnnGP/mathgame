@@ -1,521 +1,381 @@
-import React, { useState, useEffect } from 'react';
-import { Trophy, Users, Zap, Target, Brain, Calculator, Clock, Play } from 'lucide-react';
+```html
 
-const TEAMS = [
-  { id: 1, name: 'Equipo Rojo', color: 'bg-red-500', textColor: 'text-red-600' },
-  { id: 2, name: 'Equipo Azul', color: 'bg-blue-500', textColor: 'text-blue-600' },
-  { id: 3, name: 'Equipo Verde', color: 'bg-green-500', textColor: 'text-green-600' },
-  { id: 4, name: 'Equipo Amarillo', color: 'bg-yellow-500', textColor: 'text-yellow-600' },
-  { id: 5, name: 'Equipo Naranja', color: 'bg-orange-500', textColor: 'text-orange-600' },
-  { id: 6, name: 'Equipo Morado', color: 'bg-purple-500', textColor: 'text-purple-600' }
-];
 
-const CHALLENGE_TYPES = {
-  MATH: 'math',
-  SEQUENCE: 'sequence',
-  VISUAL: 'visual'
-};
 
-const TIME_LIMITS = {
-  math: 30,
-  sequence: 45,
-  visual: 40
-};
-
-const App = () => {
-  const [view, setView] = useState('select');
-  const [selectedTeam, setSelectedTeam] = useState(null);
-  const [scores, setScores] = useState({});
-  const [currentChallenge, setCurrentChallenge] = useState(null);
-  const [answer, setAnswer] = useState('');
-  const [feedback, setFeedback] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [timeLeft, setTimeLeft] = useState(0);
-  const [isActive, setIsActive] = useState(false);
-
-  useEffect(() => {
-    loadScores();
-  }, []);
-
-  useEffect(() => {
-    let interval = null;
-    if (isActive && timeLeft > 0) {
-      interval = setInterval(() => {
-        setTimeLeft(time => {
-          if (time <= 1) {
-            setIsActive(false);
-            handleTimeOut();
-            return 0;
-          }
-          return time - 1;
-        });
-      }, 1000);
-    } else if (timeLeft === 0) {
-      clearInterval(interval);
-    }
-    return () => clearInterval(interval);
-  }, [isActive, timeLeft]);
-
-  const loadScores = async () => {
-    try {
-      const result = await window.storage.get('team-scores', true);
-      if (result) {
-        setScores(JSON.parse(result.value));
-      } else {
-        const initialScores = {};
-        TEAMS.forEach(team => {
-          initialScores[team.id] = 0;
-        });
-        setScores(initialScores);
-        await window.storage.set('team-scores', JSON.stringify(initialScores), true);
-      }
-    } catch (error) {
-      const initialScores = {};
-      TEAMS.forEach(team => {
-        initialScores[team.id] = 0;
-      });
-      setScores(initialScores);
-      await window.storage.set('team-scores', JSON.stringify(initialScores), true);
-    }
-    setLoading(false);
-  };
-
-  const updateScore = async (teamId, points) => {
-    const newScores = { ...scores, [teamId]: (scores[teamId] || 0) + points };
-    setScores(newScores);
-    await window.storage.set('team-scores', JSON.stringify(newScores), true);
-  };
-
-  const resetScores = async () => {
-    const initialScores = {};
-    TEAMS.forEach(team => {
-      initialScores[team.id] = 0;
-    });
-    setScores(initialScores);
-    await window.storage.set('team-scores', JSON.stringify(initialScores), true);
-  };
-
-  const generateMathChallenge = () => {
-    const operations = [
-      { type: '+', min: 5, max: 50 },
-      { type: '-', min: 5, max: 50 },
-      { type: '×', min: 2, max: 12 },
-      { type: '÷', min: 2, max: 10 }
-    ];
     
-    const op = operations[Math.floor(Math.random() * operations.length)];
-    let a, b, result;
     
-    if (op.type === '÷') {
-      b = Math.floor(Math.random() * (op.max - op.min + 1)) + op.min;
-      result = Math.floor(Math.random() * 10) + 1;
-      a = b * result;
-    } else {
-      a = Math.floor(Math.random() * (op.max - op.min + 1)) + op.min;
-      b = Math.floor(Math.random() * (op.max - op.min + 1)) + op.min;
-      
-      if (op.type === '+') result = a + b;
-      else if (op.type === '-') {
-        if (a < b) [a, b] = [b, a];
-        result = a - b;
-      }
-      else if (op.type === '×') result = a * b;
-    }
+    Competición Matemática
     
-    return {
-      type: CHALLENGE_TYPES.MATH,
-      question: `${a} ${op.type} ${b}`,
-      answer: result,
-      points: op.type === '×' || op.type === '÷' ? 15 : 10
-    };
-  };
-
-  const generateSequenceChallenge = () => {
-    const patterns = [
-      { seq: [2, 4, 6, 8], next: 10, desc: '2, 4, 6, 8, ?' },
-      { seq: [1, 3, 5, 7], next: 9, desc: '1, 3, 5, 7, ?' },
-      { seq: [5, 10, 15, 20], next: 25, desc: '5, 10, 15, 20, ?' },
-      { seq: [10, 20, 30, 40], next: 50, desc: '10, 20, 30, 40, ?' },
-      { seq: [3, 6, 9, 12], next: 15, desc: '3, 6, 9, 12, ?' },
-      { seq: [2, 4, 8, 16], next: 32, desc: '2, 4, 8, 16, ?' },
-      { seq: [100, 90, 80, 70], next: 60, desc: '100, 90, 80, 70, ?' }
-    ];
     
-    const pattern = patterns[Math.floor(Math.random() * patterns.length)];
     
-    return {
-      type: CHALLENGE_TYPES.SEQUENCE,
-      question: `¿Qué número sigue? ${pattern.desc}`,
-      answer: pattern.next,
-      points: 20
-    };
-  };
-
-  const generateVisualChallenge = () => {
-    const challenges = [
-      {
-        question: '🔴🔴🔵🔴🔴🔵🔴🔴 ¿Qué sigue?',
-        options: ['🔵', '🔴', '🟢', '🟡'],
-        answer: '🔵',
-        correctIndex: 0
-      },
-      {
-        question: '⭐⭐⭐🌙⭐⭐⭐🌙 ¿Qué sigue?',
-        options: ['🌙', '⭐', '☀️', '🌟'],
-        answer: '⭐',
-        correctIndex: 1
-      },
-      {
-        question: '🟥🟦🟦🟥🟦🟦 ¿Qué sigue?',
-        options: ['🟦', '🟥', '🟩', '🟨'],
-        answer: '🟥',
-        correctIndex: 1
-      },
-      {
-        question: '1️⃣2️⃣2️⃣3️⃣3️⃣3️⃣ ¿Qué sigue?',
-        options: ['1️⃣', '2️⃣', '3️⃣', '4️⃣'],
-        answer: '4️⃣',
-        correctIndex: 3
-      },
-      {
-        question: '🌕🌗🌑🌕🌗🌑 ¿Qué sigue?',
-        options: ['🌕', '🌗', '🌑', '🌘'],
-        answer: '🌕',
-        correctIndex: 0
-      }
-    ];
     
-    const challenge = challenges[Math.floor(Math.random() * challenges.length)];
     
-    return {
-      type: CHALLENGE_TYPES.VISUAL,
-      question: challenge.question,
-      options: challenge.options,
-      answer: challenge.answer,
-      correctIndex: challenge.correctIndex,
-      points: 25
-    };
-  };
 
-  const startNewChallenge = () => {
-    const rand = Math.random();
-    let challenge;
+
     
-    if (rand < 0.4) {
-      challenge = generateMathChallenge();
-    } else if (rand < 0.7) {
-      challenge = generateSequenceChallenge();
-    } else {
-      challenge = generateVisualChallenge();
-    }
+
     
-    setCurrentChallenge(challenge);
-    setAnswer('');
-    setFeedback('');
-    setTimeLeft(TIME_LIMITS[challenge.type]);
-    setIsActive(true);
-  };
+        const { useState, useEffect } = React;
 
-  const handleTimeOut = () => {
-    setFeedback('⏱️ ¡Tiempo agotado! Siguiente pregunta...');
-    setTimeout(() => {
-      startNewChallenge();
-    }, 2000);
-  };
+        const TEAMS = [
+          { id: 1, name: 'Equipo Rojo', color: 'bg-red-500' },
+          { id: 2, name: 'Equipo Azul', color: 'bg-blue-500' },
+          { id: 3, name: 'Equipo Verde', color: 'bg-green-500' },
+          { id: 4, name: 'Equipo Amarillo', color: 'bg-yellow-500' },
+          { id: 5, name: 'Equipo Naranja', color: 'bg-orange-500' },
+          { id: 6, name: 'Equipo Morado', color: 'bg-purple-500' }
+        ];
 
-  const checkAnswer = async () => {
-    if (!answer && currentChallenge.type !== CHALLENGE_TYPES.VISUAL) {
-      setFeedback('Por favor, introduce una respuesta');
-      return;
-    }
+        const TIME_LIMITS = { math: 30, sequence: 45, visual: 40 };
 
-    setIsActive(false);
+        // Iconos desde Lucide
+        const Trophy = () => ;
+        const Users = () => ;
+        const Clock = () => ;
+        const Calculator = () => ;
+        const Target = () => ;
+        const Brain = () => ;
 
-    const isCorrect = currentChallenge.type === CHALLENGE_TYPES.VISUAL
-      ? answer === currentChallenge.answer
-      : parseInt(answer) === currentChallenge.answer;
+        function App() {
+          const [view, setView] = useState('select');
+          const [selectedTeam, setSelectedTeam] = useState(null);
+          const [scores, setScores] = useState(() => {
+            const saved = localStorage.getItem('scores');
+            if (saved) return JSON.parse(saved);
+            const initial = {};
+            TEAMS.forEach(t => initial[t.id] = 0);
+            return initial;
+          });
+          const [currentChallenge, setCurrentChallenge] = useState(null);
+          const [answer, setAnswer] = useState('');
+          const [feedback, setFeedback] = useState('');
+          const [timeLeft, setTimeLeft] = useState(0);
+          const [isActive, setIsActive] = useState(false);
 
-    if (isCorrect) {
-      const bonusPoints = timeLeft > TIME_LIMITS[currentChallenge.type] * 0.7 ? 5 : 0;
-      const totalPoints = currentChallenge.points + bonusPoints;
-      await updateScore(selectedTeam.id, totalPoints);
-      setFeedback(`¡CORRECTO! +${totalPoints} puntos ${bonusPoints > 0 ? '🚀 ¡Bonus velocidad!' : '🎉'}`);
-      setTimeout(() => {
-        startNewChallenge();
-      }, 2000);
-    } else {
-      setFeedback('❌ Incorrecto. ¡Inténtalo de nuevo! 💪');
-      setTimeout(() => setFeedback(''), 2000);
-      setTimeLeft(TIME_LIMITS[currentChallenge.type]);
-      setIsActive(true);
-    }
-  };
+          useEffect(() => {
+            localStorage.setItem('scores', JSON.stringify(scores));
+            window.dispatchEvent(new Event('storage'));
+          }, [scores]);
 
-  const getTimeColor = () => {
-    const percentage = (timeLeft / TIME_LIMITS[currentChallenge?.type]) * 100;
-    if (percentage > 60) return 'text-green-400';
-    if (percentage > 30) return 'text-yellow-400';
-    return 'text-red-400';
-  };
+          useEffect(() => {
+            const handleStorage = () => {
+              const saved = localStorage.getItem('scores');
+              if (saved) setScores(JSON.parse(saved));
+            };
+            window.addEventListener('storage', handleStorage);
+            return () => window.removeEventListener('storage', handleStorage);
+          }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center">
-        <div className="text-white text-2xl">Cargando...</div>
-      </div>
-    );
-  }
-
-  // VISTA DE SELECCIÓN
-  if (view === 'select') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-600 p-4">
-        <div className="max-w-4xl mx-auto pt-12">
-          <div className="text-center mb-12">
-            <h1 className="text-5xl font-bold text-white mb-4">🏆 Competición Matemática 🏆</h1>
-            <p className="text-xl text-blue-100">Elige tu opción</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <button
-              onClick={() => setView('team-select')}
-              className="bg-white rounded-2xl p-8 shadow-2xl hover:scale-105 transition-transform"
-            >
-              <Users className="w-16 h-16 text-blue-600 mx-auto mb-4" />
-              <h2 className="text-3xl font-bold text-gray-800 mb-2">Jugar</h2>
-              <p className="text-gray-600">Selecciona tu equipo y empieza a competir</p>
-            </button>
-
-            <button
-              onClick={() => setView('display')}
-              className="bg-white rounded-2xl p-8 shadow-2xl hover:scale-105 transition-transform"
-            >
-              <Trophy className="w-16 h-16 text-yellow-600 mx-auto mb-4" />
-              <h2 className="text-3xl font-bold text-gray-800 mb-2">Pantalla Grande</h2>
-              <p className="text-gray-600">Ver clasificación en la PDI</p>
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // VISTA DE SELECCIÓN DE EQUIPO
-  if (view === 'team-select') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-600 p-4">
-        <div className="max-w-4xl mx-auto pt-8">
-          <button
-            onClick={() => setView('select')}
-            className="mb-6 text-white text-lg hover:underline"
-          >
-            ← Volver
-          </button>
-
-          <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-white mb-4">Selecciona tu Equipo</h1>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {TEAMS.map(team => (
-              <button
-                key={team.id}
-                onClick={() => {
-                  setSelectedTeam(team);
-                  setView('game');
-                  startNewChallenge();
-                }}
-                className={`${team.color} rounded-2xl p-6 shadow-2xl hover:scale-105 transition-transform`}
-              >
-                <div className="text-white text-center">
-                  <Users className="w-12 h-12 mx-auto mb-3" />
-                  <h2 className="text-2xl font-bold mb-2">{team.name}</h2>
-                  <p className="text-xl font-semibold">{scores[team.id] || 0} puntos</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // VISTA DE JUEGO
-  if (view === 'game' && selectedTeam && currentChallenge) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-600 p-4">
-        <div className="max-w-2xl mx-auto pt-4">
-          <button
-            onClick={() => {
-              setView('team-select');
+          useEffect(() => {
+            if (isActive && timeLeft > 0) {
+              const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+              return () => clearTimeout(timer);
+            } else if (timeLeft === 0 && isActive) {
               setIsActive(false);
-            }}
-            className="mb-4 text-white text-lg hover:underline"
-          >
-            ← Cambiar equipo
-          </button>
+              setFeedback('⏱️ ¡Tiempo agotado!');
+              setTimeout(() => startNewChallenge(), 2000);
+            }
+          }, [isActive, timeLeft]);
 
-          <div className={`${selectedTeam.color} rounded-2xl p-6 shadow-2xl mb-6`}>
-            <div className="flex items-center justify-between text-white">
-              <div>
-                <h2 className="text-2xl font-bold">{selectedTeam.name}</h2>
-                <p className="text-xl">Puntuación: {scores[selectedTeam.id] || 0}</p>
-              </div>
-              <Trophy className="w-12 h-12" />
-            </div>
-          </div>
+          useEffect(() => {
+            lucide.createIcons();
+          });
 
-          <div className="bg-white rounded-2xl p-8 shadow-2xl">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-2">
-                {currentChallenge.type === CHALLENGE_TYPES.MATH && <Calculator className="w-8 h-8 text-blue-600" />}
-                {currentChallenge.type === CHALLENGE_TYPES.SEQUENCE && <Target className="w-8 h-8 text-green-600" />}
-                {currentChallenge.type === CHALLENGE_TYPES.VISUAL && <Brain className="w-8 h-8 text-purple-600" />}
-                <span className="text-sm font-semibold text-gray-600 uppercase">
-                  {currentChallenge.type === CHALLENGE_TYPES.MATH && 'Matemáticas'}
-                  {currentChallenge.type === CHALLENGE_TYPES.SEQUENCE && 'Secuencias'}
-                  {currentChallenge.type === CHALLENGE_TYPES.VISUAL && 'Lógica Visual'}
-                </span>
-              </div>
-              <div className={`flex items-center gap-2 ${getTimeColor()} font-bold text-2xl`}>
-                <Clock className="w-8 h-8" />
-                <span>{timeLeft}s</span>
-              </div>
-            </div>
+          const updateScore = (teamId, points) => {
+            setScores(prev => ({ ...prev, [teamId]: (prev[teamId] || 0) + points }));
+          };
 
-            <div className="mb-6">
-              <h3 className="text-3xl font-bold text-gray-800 text-center mb-4">
-                {currentChallenge.question}
-              </h3>
-              <div className="text-center text-lg text-gray-600">
-                Vale {currentChallenge.points} puntos
-              </div>
-            </div>
+          const resetScores = () => {
+            const initial = {};
+            TEAMS.forEach(t => initial[t.id] = 0);
+            setScores(initial);
+          };
 
-            {currentChallenge.type === CHALLENGE_TYPES.VISUAL ? (
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                {currentChallenge.options.map((option, index) => (
-                  <button
-                    key={index}
-                    onClick={() => {
-                      setAnswer(option);
-                      setTimeout(() => checkAnswer(), 100);
-                    }}
-                    className={`p-8 text-6xl rounded-xl border-4 transition-all ${
-                      answer === option
-                        ? 'border-blue-500 bg-blue-50 scale-95'
-                        : 'border-gray-300 hover:border-blue-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="mb-6">
-                <input
-                  type="number"
-                  value={answer}
-                  onChange={(e) => setAnswer(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && checkAnswer()}
-                  className="w-full p-4 text-3xl text-center border-4 border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
-                  placeholder="Tu respuesta"
-                  autoFocus
-                />
-              </div>
-            )}
+          const generateMathChallenge = () => {
+            const ops = [
+              { type: '+', min: 5, max: 50 },
+              { type: '-', min: 5, max: 50 },
+              { type: '×', min: 2, max: 12 },
+              { type: '÷', min: 2, max: 10 }
+            ];
+            const op = ops[Math.floor(Math.random() * ops.length)];
+            let a, b, result;
+            
+            if (op.type === '÷') {
+              b = Math.floor(Math.random() * (op.max - op.min + 1)) + op.min;
+              result = Math.floor(Math.random() * 10) + 1;
+              a = b * result;
+            } else {
+              a = Math.floor(Math.random() * (op.max - op.min + 1)) + op.min;
+              b = Math.floor(Math.random() * (op.max - op.min + 1)) + op.min;
+              if (op.type === '+') result = a + b;
+              else if (op.type === '-') {
+                if (a < b) [a, b] = [b, a];
+                result = a - b;
+              } else if (op.type === '×') result = a * b;
+            }
+            
+            return {
+              type: 'math',
+              question: `${a} ${op.type} ${b}`,
+              answer: result,
+              points: op.type === '×' || op.type === '÷' ? 15 : 10
+            };
+          };
 
-            {currentChallenge.type !== CHALLENGE_TYPES.VISUAL && (
-              <button
-                onClick={checkAnswer}
-                disabled={!answer}
-                className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-4 rounded-xl text-2xl font-bold hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-              >
-                Comprobar Respuesta
-              </button>
-            )}
+          const generateSequenceChallenge = () => {
+            const patterns = [
+              { next: 10, desc: '2, 4, 6, 8, ?' },
+              { next: 9, desc: '1, 3, 5, 7, ?' },
+              { next: 25, desc: '5, 10, 15, 20, ?' },
+              { next: 50, desc: '10, 20, 30, 40, ?' },
+              { next: 15, desc: '3, 6, 9, 12, ?' },
+              { next: 32, desc: '2, 4, 8, 16, ?' },
+              { next: 60, desc: '100, 90, 80, 70, ?' }
+            ];
+            const p = patterns[Math.floor(Math.random() * patterns.length)];
+            return {
+              type: 'sequence',
+              question: `¿Qué número sigue? ${p.desc}`,
+              answer: p.next,
+              points: 20
+            };
+          };
 
-            {feedback && (
-              <div className={`mt-6 p-4 rounded-xl text-center text-xl font-bold ${
-                feedback.includes('CORRECTO') || feedback.includes('Bonus')
-                  ? 'bg-green-100 text-green-800'
-                  : feedback.includes('Tiempo')
-                  ? 'bg-orange-100 text-orange-800'
-                  : 'bg-red-100 text-red-800'
-              }`}>
-                {feedback}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
+          const generateVisualChallenge = () => {
+            const challenges = [
+              { question: '🔴🔴🔵🔴🔴🔵🔴🔴 ¿Qué sigue?', options: ['🔵', '🔴', '🟢', '🟡'], answer: '🔵' },
+              { question: '⭐⭐⭐🌙⭐⭐⭐🌙 ¿Qué sigue?', options: ['🌙', '⭐', '☀️', '🌟'], answer: '⭐' },
+              { question: '🟥🟦🟦🟥🟦🟦 ¿Qué sigue?', options: ['🟦', '🟥', '🟩', '🟨'], answer: '🟥' },
+              { question: '1️⃣2️⃣2️⃣3️⃣3️⃣3️⃣ ¿Qué sigue?', options: ['1️⃣', '2️⃣', '3️⃣', '4️⃣'], answer: '4️⃣' },
+              { question: '🌕🌗🌑🌕🌗🌑 ¿Qué sigue?', options: ['🌕', '🌗', '🌑', '🌘'], answer: '🌕' }
+            ];
+            const c = challenges[Math.floor(Math.random() * challenges.length)];
+            return { type: 'visual', ...c, points: 25 };
+          };
 
-  // VISTA DE PANTALLA GRANDE (PDI)
-  if (view === 'display') {
-    const sortedTeams = TEAMS.sort((a, b) => (scores[b.id] || 0) - (scores[a.id] || 0));
+          const startNewChallenge = () => {
+            const rand = Math.random();
+            let challenge;
+            if (rand < 0.4) challenge = generateMathChallenge();
+            else if (rand < 0.7) challenge = generateSequenceChallenge();
+            else challenge = generateVisualChallenge();
+            
+            setCurrentChallenge(challenge);
+            setAnswer('');
+            setFeedback('');
+            setTimeLeft(TIME_LIMITS[challenge.type]);
+            setIsActive(true);
+          };
+
+          const checkAnswer = () => {
+            if (!answer && currentChallenge.type !== 'visual') {
+              setFeedback('Por favor, introduce una respuesta');
+              return;
+            }
+
+            setIsActive(false);
+            const isCorrect = currentChallenge.type === 'visual'
+              ? answer === currentChallenge.answer
+              : parseInt(answer) === currentChallenge.answer;
+
+            if (isCorrect) {
+              const bonus = timeLeft > TIME_LIMITS[currentChallenge.type] * 0.7 ? 5 : 0;
+              const total = currentChallenge.points + bonus;
+              updateScore(selectedTeam.id, total);
+              setFeedback(`¡CORRECTO! +${total} puntos ${bonus > 0 ? '🚀 ¡Bonus!' : '🎉'}`);
+              setTimeout(() => startNewChallenge(), 2000);
+            } else {
+              setFeedback('❌ Incorrecto. ¡Inténtalo de nuevo! 💪');
+              setTimeout(() => setFeedback(''), 2000);
+              setTimeLeft(TIME_LIMITS[currentChallenge.type]);
+              setIsActive(true);
+            }
+          };
+
+          const getTimeColor = () => {
+            if (!currentChallenge) return 'text-green-400';
+            const pct = (timeLeft / TIME_LIMITS[currentChallenge.type]) * 100;
+            return pct > 60 ? 'text-green-400' : pct > 30 ? 'text-yellow-400' : 'text-red-400';
+          };
+
+          // VISTA SELECCIÓN
+          if (view === 'select') {
+            return (
+              
+                
+                  
+                    🏆 Competición Matemática 🏆
+                    Elige tu opción
+                  
+                  
+                    <button onClick={() => setView('team-select')} className="bg-white rounded-2xl p-8 shadow-2xl hover:scale-105 transition-transform">
+                      
+                      Jugar
+                      Selecciona tu equipo y compite
+                    
+                    <button onClick={() => setView('display')} className="bg-white rounded-2xl p-8 shadow-2xl hover:scale-105 transition-transform">
+                      
+                      Pantalla Grande
+                      Ver clasificación en la PDI
+                    
+                  
+                
+              
+            );
+          }
+
+          // SELECCIÓN EQUIPO
+          if (view === 'team-select') {
+            return (
+              
+                
+                  <button onClick={() => setView('select')} className="mb-6 text-white text-lg hover:underline">← Volver
+                  
+                    Selecciona tu Equipo
+                  
+                  
+                    {TEAMS.map(team => (
+                      <button key={team.id} onClick={() => { setSelectedTeam(team); setView('game'); startNewChallenge(); }}
+                        className={`${team.color} rounded-2xl p-6 shadow-2xl hover:scale-105 transition-transform`}>
+                        
+                          
+                          {team.name}
+                          {scores[team.id] || 0} puntos
+                        
+                      
+                    ))}
+                  
+                
+              
+            );
+          }
+
+          // JUEGO
+          if (view === 'game' && selectedTeam && currentChallenge) {
+            return (
+              
+                
+                  <button onClick={() => { setView('team-select'); setIsActive(false); }} className="mb-4 text-white text-lg hover:underline">← Cambiar equipo
+                  
+                    
+                      
+                        {selectedTeam.name}
+                        Puntuación: {scores[selectedTeam.id] || 0}
+                      
+                      
+                    
+                  
+                  
+                    
+                      
+                        {currentChallenge.type === 'math' && }
+                        {currentChallenge.type === 'sequence' && }
+                        {currentChallenge.type === 'visual' && }
+                        
+                          {currentChallenge.type === 'math' && 'Matemáticas'}
+                          {currentChallenge.type === 'sequence' && 'Secuencias'}
+                          {currentChallenge.type === 'visual' && 'Lógica Visual'}
+                        
+                      
+                      
+                        
+                        {timeLeft}s
+                      
+                    
+                    
+                      {currentChallenge.question}
+                      Vale {currentChallenge.points} puntos
+                    
+                    {currentChallenge.type === 'visual' ? (
+                      
+                        {currentChallenge.options.map((opt, i) => (
+                          <button key={i} onClick={() => { setAnswer(opt); setTimeout(() => checkAnswer(), 100); }}
+                            className={`p-8 text-6xl rounded-xl border-4 transition-all ${answer === opt ? 'border-blue-500 bg-blue-50 scale-95' : 'border-gray-300 hover:border-blue-300 hover:bg-gray-50'}`}>
+                            {opt}
+                          
+                        ))}
+                      
+                    ) : (
+                      
+                        <input type="number" value={answer} onChange={(e) => setAnswer(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && checkAnswer()}
+                          className="w-full p-4 text-3xl text-center border-4 border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
+                          placeholder="Tu respuesta" autoFocus />
+                      
+                    )}
+                    {currentChallenge.type !== 'visual' && (
+                      
+                        Comprobar Respuesta
+                      
+                    )}
+                    {feedback && (
+                      
+                        {feedback}
+                      
+                    )}
+                  
+                
+              
+            );
+          }
+
+          // PANTALLA GRANDE
+          if (view === 'display') {
+            const sorted = [...TEAMS].sort((a, b) => (scores[b.id] || 0) - (scores[a.id] || 0));
+            return (
+              
+                
+                  
+                    
+                       Competición Matemática 
+                    
+                    Clasificación en Tiempo Real 🔥
+                  
+                  
+                    {sorted.map((team, idx) => (
+                      
+                        
+                          
+                            {idx + 1}
+                            {team.name}
+                          
+                          
+                            {scores[team.id] || 0}
+                            puntos
+                          
+                        
+                      
+                    ))}
+                  
+                  
+                    <button onClick={() => window.confirm('¿Reiniciar?') && resetScores()}
+                      className="bg-red-500 hover:bg-red-600 text-white px-8 py-4 rounded-xl text-xl font-bold shadow-lg transition-colors">
+                      Reiniciar Puntuaciones
+                    
+                    <button onClick={() => setView('select')}
+                      className="ml-4 bg-gray-500 hover:bg-gray-600 text-white px-8 py-4 rounded-xl text-xl font-bold shadow-lg transition-colors">
+                      Volver al Menú
+                    
+                  
+                
+              
+            );
+          }
+
+          return null;
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render();
     
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <h1 className="text-7xl font-bold text-white mb-4 flex items-center justify-center gap-4">
-              <Trophy className="w-20 h-20 text-yellow-400" />
-              Competición Matemática
-              <Trophy className="w-20 h-20 text-yellow-400" />
-            </h1>
-            <p className="text-3xl text-blue-200">Clasificación en Tiempo Real</p>
-          </div>
+    
+    
+        .lucide-icon { 
+            width: 64px; 
+            height: 64px; 
+            margin: 0 auto;
+        }
+    
 
-          <div className="grid grid-cols-1 gap-6 mb-8">
-            {sortedTeams.map((team, index) => (
-              <div
-                key={team.id}
-                className={`${team.color} rounded-3xl p-8 shadow-2xl transform hover:scale-105 transition-transform`}
-              >
-                <div className="flex items-center justify-between text-white">
-                  <div className="flex items-center gap-6">
-                    <div className="text-6xl font-bold bg-white bg-opacity-20 rounded-full w-20 h-20 flex items-center justify-center">
-                      {index + 1}
-                    </div>
-                    <div>
-                      <h3 className="text-4xl font-bold">{team.name}</h3>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-6xl font-bold">{scores[team.id] || 0}</div>
-                    <div className="text-2xl opacity-90">puntos</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
 
-          <div className="text-center">
-            <button
-              onClick={() => {
-                if (window.confirm('¿Reiniciar todas las puntuaciones?')) {
-                  resetScores();
-                }
-              }}
-              className="bg-red-500 hover:bg-red-600 text-white px-8 py-4 rounded-xl text-xl font-bold shadow-lg transition-colors"
-            >
-              Reiniciar Puntuaciones
-            </button>
-            <button
-              onClick={() => setView('select')}
-              className="ml-4 bg-gray-500 hover:bg-gray-600 text-white px-8 py-4 rounded-xl text-xl font-bold shadow-lg transition-colors"
-            >
-              Volver al Menú
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return null;
-};
-
-export default App;
+```
