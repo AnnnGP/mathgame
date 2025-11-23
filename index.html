@@ -44,9 +44,21 @@
             const [teamId, setTeamId] = useState(null);
             const [alumnoRespuesta, setAlumnoRespuesta] = useState(null);
 
-            // Efecto para gestionar el temporizador
+            // Efecto para gestionar el PIN al cargar la URL
             useEffect(() => {
-                if ((mode === 'profesorPlaying') && !showResults && timeLeft > 0) {
+                const urlPin = getUrlPin();
+                if (urlPin && mode === 'selectMode') {
+                    setGamePin(urlPin);
+                    // Si viene con PIN en la URL, se asume que intenta unirse
+                    // y se le dirige al menú del alumno con el PIN pre-cargado
+                    setInputPin(urlPin);
+                    setMode('alumnoMenu');
+                }
+            }, []); // Se ejecuta solo al montar
+
+            // Efecto para gestionar el temporizador (Solo para Profesor)
+            useEffect(() => {
+                if (mode === 'profesorPlaying' && !showResults && timeLeft > 0) {
                     const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
                     return () => clearTimeout(timer);
                 }
@@ -55,19 +67,6 @@
                 }
             }, [timeLeft, mode, showResults]);
 
-            // **NUEVO Efecto para simular la "sincronización" del alumno**
-            // Si el alumno está esperando y el profesor establece una pregunta, el alumno comienza a jugar.
-            useEffect(() => {
-                if (mode === 'esperandoPartida' && currentQuestion) {
-                    // Asignar al primer equipo disponible de forma simulada
-                    const teamIndex = teams.length > 0 ? 0 : null; // Siempre se asigna al Equipo 1 (0)
-                    if (teamIndex !== null) {
-                        setTeamId(teamIndex);
-                        setMode('alumnoPlaying');
-                    }
-                }
-            }, [mode, currentQuestion, teams.length]);
-            // **FIN NUEVO Efecto**
 
             const generateCalculoQuestion = () => {
                 let a = Math.floor(Math.random() * (difficulty === 'facil' ? 20 : difficulty === 'media' ? 50 : 100)) + 1;
@@ -83,12 +82,10 @@
                 }
                 else if (op === '×') answer = a * b;
                 else { 
-                    // Asegurar que la división sea de números enteros y generar el dividendo
                     const divisor = b || 1;
                     const result = Math.floor(a / divisor);
                     a = result * divisor;
                     answer = result;
-                    // Se simplificó la generación para evitar bucles o números complejos
                 }
 
                 const options = [answer];
@@ -127,10 +124,11 @@
                 setMode('profesorPlaying');
             };
 
+            // **CORRECCIÓN CLAVE:** El alumno avanza directamente al modo de juego
             const unirAlEquipo = () => {
                 if (inputPin.toUpperCase() === gamePin) {
-                    // **CORRECCIÓN CLAVE:** El alumno entra en modo de espera
-                    setMode('esperandoPartida');
+                    setTeamId(0); // Asigna al Equipo 1 (0) de forma simulada
+                    setMode('alumnoPlaying');
                 } else {
                     alert('PIN incorrecto');
                     setInputPin('');
@@ -141,11 +139,10 @@
 
             const enviarRespuesta = () => {
                 if (alumnoRespuesta !== null) {
-                    // Enviar la respuesta solo si la partida está en modo de juego
-                    if (mode === 'alumnoPlaying') {
+                    // Solo si la pregunta no ha caducado (simulación)
+                    if (timeLeft > 0 || mode === 'alumnoPlaying') {
                         setTeamAnswers(prev => ({ ...prev, [teamId]: alumnoRespuesta }));
                         setAlumnoRespuesta(null);
-                        // El alumno se queda esperando los resultados y la siguiente pregunta.
                     }
                 }
             };
@@ -168,6 +165,8 @@
                     setCurrentQuestion(generateQuestion());
                     setTimeLeft(20);
                     setShowResults(false);
+                    // Reiniciar la respuesta del alumno para la nueva pregunta
+                    setAlumnoRespuesta(null); 
                 }
             };
 
@@ -178,21 +177,46 @@
                 setQuestionNumber(1);
                 setTeamId(null);
                 setAlumnoRespuesta(null);
-                setCurrentQuestion(null); // Reiniciar pregunta también
+                setCurrentQuestion(null);
+                // Asegurar que el PIN es nuevo al salir
                 const newPin = Math.random().toString(36).substring(2, 8).toUpperCase();
                 setGamePin(newPin);
+                window.history.pushState({}, '', window.location.pathname);
             };
 
-            const generateQRSvg = () => `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(window.location.href)}`;
+            const generateQRSvg = () => `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(window.location.href + `?pin=${gamePin}`)}`;
 
             const descargarQR = () => {
                 const link = document.createElement('a');
                 link.href = generateQRSvg();
-                link.download = 'MathGame_QR.png';
+                link.download = `MathGame_PIN_${gamePin}.png`;
                 link.click();
             };
 
             // PANTALLA INICIAL
-            if (mode === 'selectMode') {
+            if (mode === 'selectMode' || mode === 'profesorMenu') {
+                if (mode === 'selectMode') {
+                    return e('div', { className: 'min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4' },
+                        e('div', { className: 'bg-white rounded-lg shadow-2xl p-8 max-w-md w-full' },
+                            e('h1', { className: 'text-4xl font-bold text-center mb-2 text-gray-800' }, 'MathGame'),
+                            e('p', { className: 'text-center text-gray-600 mb-8' }, '¡Cálculo, lógica y acertijos!'),
+                            e('div', { className: 'space-y-4 mb-8' },
+                                e('button', { onClick: () => setMode('profesorMenu'), className: 'w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-4 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition' }, '📺 Soy Profesorado'),
+                                e('button', { onClick: () => setMode('alumnoMenu'), className: 'w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition' }, '📱 Soy Alumnado')
+                            ),
+                            e('div', { className: 'border-t-2 border-gray-300 pt-6' },
+                                e('p', { className: 'text-center text-sm text-gray-600 mb-4' }, '📱 QR para compartir con los alumnos'),
+                                e('div', { className: 'flex flex-col items-center gap-4' },
+                                    e('img', { src: generateQRSvg(), alt: 'MathGame QR', className: 'w-32 h-32 border-2 border-gray-300 p-2 bg-white rounded' }),
+                                    e('button', { onClick: descargarQR, className: 'bg-gradient-to-r from-purple-500 to-purple-600 text-white py-2 px-4 rounded-lg font-semibold text-sm' }, '⬇️ Descargar QR'),
+                                    e('p', { className: 'text-xs text-gray-500 text-center' }, `PIN: ${gamePin}`)
+                                )
+                            )
+                        )
+                    );
+                }
+
+                // MENÚ PROFESOR (Si mode === 'profesorMenu')
                 return e('div', { className: 'min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4' },
-                    e('div', { className: 'bg-white rounded
+                    e('div', { className: 'bg-white rounded-lg shadow-2xl p-8 max-w-md w-full' },
+                        e('h1', { className: 'text-3xl font-bold text-center mb-6 text-gray-800' },
