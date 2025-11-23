@@ -4,15 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MathGame - Competencia Matemática</title>
-    <!-- Librerías de React -->
+    <!-- Librerías de React y Babel (necesario para compilar el JSX en el navegador) -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <!-- ¡Línea Faltante! Necesaria para compilar el JSX en el navegador -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <!-- Tailwind CSS para estilos -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif; }
+        body { margin: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif; }
     </style>
 </head>
 <body>
@@ -20,19 +19,19 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
         
+        // Componente principal del juego
         function MathGame() {
           const [mode, setMode] = useState('selectMode');
           // Genera un PIN aleatorio
           const [gamePin, setGamePin] = useState(Math.random().toString(36).substring(2, 8).toUpperCase());
           const [inputPin, setInputPin] = useState('');
-          const [equipoNombre, setEquipoNombre] = useState('');
-          const [joinError, setJoinError] = useState(false); // Nuevo estado para error de PIN
+          const [joinError, setJoinError] = useState(false); // Estado para error de PIN
           
           const [teams, setTeams] = useState([]);
           const [numTeams, setNumTeams] = useState(2);
           const [difficulty, setDifficulty] = useState('media');
           const [currentQuestion, setCurrentQuestion] = useState(null);
-          const [teamAnswers, setTeamAnswers] = useState({});
+          const [teamAnswers, setTeamAnswers] = {}; 
           const [showResults, setShowResults] = useState(false);
           const [questionNumber, setQuestionNumber] = useState(1);
           const [timeLeft, setTimeLeft] = useState(20);
@@ -51,43 +50,49 @@
             }
           }, [timeLeft, mode, showResults]);
 
-          // Generación de preguntas de cálculo
+          // --- Funciones de Generación de Preguntas ---
+
           const generateCalculoQuestion = () => {
             let a, b, operation, answer;
             const operations = ['+', '-', '×', '÷'];
             const selectedOp = operations[Math.floor(Math.random() * operations.length)];
 
             // Determinar rango de números según la dificultad
-            if (difficulty === 'facil') {
-              a = Math.floor(Math.random() * 20) + 1;
-              b = Math.floor(Math.random() * 20) + 1;
-            } else if (difficulty === 'media') {
-              a = Math.floor(Math.random() * 50) + 1;
-              b = Math.floor(Math.random() * 50) + 1;
-            } else {
-              a = Math.floor(Math.random() * 100) + 1;
-              b = Math.floor(Math.random() * 100) + 1;
-            }
+            let maxVal;
+            if (difficulty === 'facil') maxVal = 20;
+            else if (difficulty === 'media') maxVal = 50;
+            else maxVal = 100;
 
-            // Asegurar que la resta sea positiva y la división tenga resultado entero
+            a = Math.floor(Math.random() * maxVal) + 1;
+            b = Math.floor(Math.random() * maxVal) + 1;
+
             if (selectedOp === '+') {
               answer = a + b;
             } else if (selectedOp === '-') {
-              answer = Math.abs(a - b);
+              // Asegurar resultado positivo
               if (a < b) [a, b] = [b, a];
+              answer = a - b;
             } else if (selectedOp === '×') {
+              // Reducir rango para multiplicación en dificultad fácil/media
+              if (difficulty !== 'dificil') {
+                  a = Math.floor(Math.random() * 10) + 1;
+                  b = Math.floor(Math.random() * 10) + 1;
+              }
               answer = a * b;
-            } else {
+            } else { // División '÷'
+              // Asegurar que la división tenga resultado entero
               b = b !== 0 ? b : 1;
               answer = Math.floor(a / b);
-              a = answer * b + Math.floor(Math.random() * b); // Generar 'a' para que la división funcione
+              a = answer * b;
+              if (a === 0 && b > 0) a = b; // Evitar 0/x=0 a menos que sea necesario
             }
 
             // Generar opciones falsas
             const options = [answer];
             while (options.length < 4) {
-              const wrong = answer + (Math.random() > 0.5 ? 1 : -1) * (Math.floor(Math.random() * 10) + 1);
-              if (!options.includes(wrong) && wrong > 0) options.push(wrong);
+              // Generar una respuesta incorrecta cercana
+              let wrong = answer + (Math.random() > 0.5 ? 1 : -1) * (Math.floor(Math.random() * 5) + 1);
+              if (!options.includes(wrong) && wrong >= 0) options.push(wrong);
             }
 
             return {
@@ -99,51 +104,21 @@
             };
           };
 
-          // Generación de preguntas de lógica (hardcoded)
           const generateLogicQuestion = () => {
             const logicQuestions = [
-              {
-                question: 'Si 2+2=5, 3+3=7, 4+4=?',
-                answer: 9,
-                options: [8, 9, 10, 11],
-                hint: 'Mira el patrón'
-              },
-              {
-                question: 'Un caracol sube 3m de día y baja 2m de noche. ¿Cuántos días tarda en subir 10m?',
-                answer: 8,
-                options: [8, 9, 10, 12],
-                hint: 'Piensa en el último día'
-              },
-              {
-                question: '¿Cuántas veces cabe el número 1 en el número 11?',
-                answer: 2,
-                options: [1, 2, 3, 11],
-                hint: 'Cuenta con cuidado'
-              },
-              {
-                question: 'Si un cuadrado tiene 4 lados, ¿cuántos lados tiene el ángulo de un cuadrado?',
-                answer: 0,
-                options: [0, 1, 2, 4],
-                hint: 'Un ángulo no es una forma'
-              },
-              {
-                question: 'Juan tiene 5 manzanas. Da 2 a María. ¿Cuántas le quedan?',
-                answer: 3,
-                options: [1, 2, 3, 5],
-                hint: 'Resta simple'
-              },
-              {
-                question: '¿Cuál es el siguiente número? 2, 4, 8, 16, ?',
-                answer: 32,
-                options: [24, 28, 32, 64],
-                hint: 'Se multiplica por 2'
-              }
+              { question: 'Si 2+2=5, 3+3=7, 4+4=?', answer: 9, options: [8, 9, 10, 11], hint: 'Mira el patrón: se suma 1 extra.' },
+              { question: 'Un caracol sube 3m de día y baja 2m de noche. ¿Cuántos días tarda en subir 10m?', answer: 8, options: [8, 9, 10, 12], hint: 'Al final, sube los últimos 3m en un día sin bajar.' },
+              { question: 'Si tienes 5 peces y 3 se ahogan, ¿cuántos quedan?', answer: 5, options: [2, 3, 5, 8], hint: 'Los peces no se ahogan.' },
+              { question: '¿Qué número sigue: 1, 1, 2, 3, 5, 8, ?', answer: 13, options: [11, 12, 13, 15], hint: 'Es la secuencia de Fibonacci.' },
+              { question: '¿Cuál es el número que, si lo inviertes, vale menos?', answer: 9, options: [6, 8, 9, 11], hint: 'El 9 invertido es 6.' },
+              { question: '¿Cuántos cuartos de pastel hay en dos pasteles y medio?', answer: 10, options: [8, 9, 10, 12], hint: 'Cada pastel tiene cuatro cuartos.' }
             ];
             
             const q = logicQuestions[Math.floor(Math.random() * logicQuestions.length)];
             return {
               type: 'logica',
               ...q,
+              options: q.options.sort(() => Math.random() - 0.5),
               icon: '🧩'
             };
           };
@@ -154,7 +129,9 @@
             return isCalculo ? generateCalculoQuestion() : generateLogicQuestion();
           };
 
-          // Iniciar el juego (Profesor)
+          // --- Lógica del Juego ---
+
+          // Iniciar el juego (Profesorado)
           const initGameProfesor = () => {
             const newTeams = Array(numTeams).fill(0).map((_, i) => ({
               id: i,
@@ -170,7 +147,7 @@
             setMode('profesorPlaying');
           };
 
-          // Unirse al juego (Alumno)
+          // Unirse al juego (Alumnado)
           const unirAlEquipo = () => {
             setJoinError(false);
             if (inputPin.toUpperCase() === gamePin) {
@@ -178,7 +155,6 @@
               setTeamId(0); 
               setMode('alumnoPlaying');
             } else {
-              // Muestra un mensaje de error en la UI en lugar de usar alert()
               setJoinError(true); 
               setInputPin('');
             }
@@ -189,7 +165,7 @@
           };
 
           const enviarRespuesta = () => {
-            if (alumnoRespuesta !== null) {
+            if (alumnoRespuesta !== null && teamId !== null) {
               setTeamAnswers(prev => ({
                 ...prev,
                 [teamId]: alumnoRespuesta
@@ -199,13 +175,12 @@
           };
 
           const nextQuestion = () => {
-            // Lógica para actualizar puntuaciones y pasar a la siguiente pregunta
             if (questionNumber >= totalQuestions) {
               setMode('resultados');
             } else {
               const newTeams = teams.map(team => {
                 const teamAnswer = teamAnswers[team.id];
-                if (teamAnswer === currentQuestion.answer) {
+                if (teamAnswer === currentQuestion?.answer) {
                   const points = difficulty === 'facil' ? 10 : difficulty === 'media' ? 20 : 30;
                   return { ...team, score: team.score + points };
                 }
@@ -247,6 +222,8 @@
             link.click();
           };
 
+          // --- Renderizado de Vistas ---
+
           // PANTALLA INICIAL (Select Mode)
           if (mode === 'selectMode') {
             return (
@@ -260,18 +237,18 @@
                       onClick={() => setMode('profesorMenu')}
                       className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-4 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition flex items-center justify-center gap-2"
                     >
-                      📺 Soy Profesor
+                      📺 Profesorado
                     </button>
                     <button
                       onClick={() => setMode('alumnoMenu')}
                       className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition flex items-center justify-center gap-2"
                     >
-                      📱 Soy Alumno
+                      📱 Alumnado
                     </button>
                   </div>
 
                   <div className="border-t-2 border-gray-300 pt-6">
-                    <p className="text-center text-sm text-gray-600 mb-4">📱 QR para compartir con los alumnos</p>
+                    <p className="text-center text-sm text-gray-600 mb-4">📱 QR para compartir con el alumnado</p>
                     <div className="flex flex-col items-center gap-4">
                       <img src={generateQRSvg()} alt="MathGame QR" className="w-32 h-32 border-2 border-gray-300 p-2 bg-white rounded" />
                       <button
@@ -280,7 +257,7 @@
                       >
                         ⬇️ Descargar QR
                       </button>
-                      <p className="text-xs text-gray-500 text-center">Guarda este QR para que los alumnos lo escaneen</p>
+                      <p className="text-xs text-gray-500 text-center">Guarda este QR para que el alumnado lo escanee</p>
                     </div>
                   </div>
                 </div>
@@ -288,17 +265,17 @@
             );
           }
 
-          // MENÚ PROFESOR
+          // MENÚ PROFESORADO
           if (mode === 'profesorMenu') {
             return (
               <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
                 <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full">
-                  <h1 className="text-3xl font-bold text-center mb-6 text-gray-800">Configuración Profesor</h1>
+                  <h1 className="text-3xl font-bold text-center mb-6 text-gray-800">Configuración Profesorado</h1>
 
                   <div className="bg-yellow-100 border-4 border-yellow-400 p-4 rounded-lg mb-6 text-center">
                     <p className="text-sm text-gray-600">Código de sesión</p>
                     <p className="text-4xl font-bold text-yellow-600">{gamePin}</p>
-                    <p className="text-xs text-gray-600 mt-2">Comparte este PIN con tus alumnos</p>
+                    <p className="text-xs text-gray-600 mt-2">Comparte este PIN con tu alumnado</p>
                   </div>
 
                   <div className="space-y-6">
@@ -331,7 +308,7 @@
             );
           }
 
-          // MENÚ ALUMNO
+          // MENÚ ALUMNADO
           if (mode === 'alumnoMenu') {
             return (
               <div className="min-h-screen bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center p-4">
@@ -358,7 +335,7 @@
             );
           }
 
-          // PROFESOR - JUGANDO
+          // PROFESORADO - JUGANDO
           if (mode === 'profesorPlaying') {
             const timeColor = timeLeft > 10 ? 'text-green-600' : timeLeft > 5 ? 'text-yellow-600' : 'text-red-600';
             const isLogicQuestion = currentQuestion?.type === 'logica';
@@ -431,7 +408,7 @@
             );
           }
 
-          // ALUMNO - JUGANDO
+          // ALUMNADO - JUGANDO
           if (mode === 'alumnoPlaying') {
             const isLogicQuestion = currentQuestion?.type === 'logica';
 
@@ -491,8 +468,31 @@
             );
           }
         }
+        
+        // Función de Renderizado con diagnóstico básico
+        function AppWrapper() {
+            // Este es un punto de inicio para la depuración
+            try {
+                return <MathGame />;
+            } catch (error) {
+                console.error("--- ERROR CRÍTICO EN LA APLICACIÓN ---");
+                console.error("El error se produjo durante el renderizado. Revisa los detalles:", error);
+                
+                // Mostrar un mensaje de error visible en la pantalla
+                return (
+                    <div className="min-h-screen bg-red-100 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full text-center">
+                            <h2 className="text-3xl font-bold text-red-600 mb-4">🚨 Error de Aplicación 🚨</h2>
+                            <p className="text-gray-700 mb-4">La aplicación no se pudo iniciar. Por favor, revisa la consola del navegador (F12) para ver los detalles del error e infórmame.</p>
+                            <button onClick={() => window.location.reload()} className="mt-4 bg-red-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-red-600 transition">Recargar Página</button>
+                        </div>
+                    </div>
+                );
+            }
+        }
 
-        ReactDOM.createRoot(document.getElementById('root')).render(<MathGame />);
+        // Renderizar la aplicación en el DOM
+        ReactDOM.createRoot(document.getElementById('root')).render(<AppWrapper />);
     </script>
 </body>
 </html>
