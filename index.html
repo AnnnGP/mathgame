@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MathGame - Competencia Matemática</title>
+  <title>MathGame</title>
   https://unpkg.com/react@18/umd/react.production.min.js</script>
   https://unpkg.com/react-dom@18/umd/react-dom.production.min.js</script>
   https://cdn.tailwindcss.com</script>
@@ -50,19 +50,16 @@
         let maxVal = difficulty === 'facil' ? 20 : difficulty === 'media' ? 50 : 100;
         a = Math.floor(Math.random() * maxVal) + 1;
         b = Math.floor(Math.random() * maxVal) + 1;
-
         if (op === '+') answer = a + b;
         else if (op === '-') { if (a < b) [a, b] = [b, a]; answer = a - b; }
         else if (op === '×') { if (difficulty !== 'dificil') { a = Math.floor(Math.random() * 10) + 1; b = Math.floor(Math.random() * 10) + 1; } answer = a * b; }
         else { b = b || 1; answer = Math.floor(a / b); a = answer * b; }
-
         const options = [answer];
         while (options.length < 4) {
           let wrong = answer + (Math.random() > 0.5 ? 1 : -1) * (Math.floor(Math.random() * 5) + 1);
           if (!options.includes(wrong) && wrong >= 0) options.push(wrong);
         }
-
-        return { type: 'calculo', question: `${a} ${op} ${b}`, answer, options: options.sort(() => Math.random() - 0.5), icon: '🧮' };
+        return { type: 'calculo', question: `${a} ${op} ${b}`, answer, options: options.sort(() => Math.random() - 0.5) };
       };
 
       const generateLogicQuestion = () => {
@@ -73,7 +70,7 @@
           { question: '¿Qué número sigue: 1,1,2,3,5,8,?', answer: 13, options: [11,12,13,15], hint: 'Secuencia Fibonacci.' }
         ];
         const q = qs[Math.floor(Math.random() * qs.length)];
-        return { type: 'logica', ...q, options: q.options.sort(() => Math.random() - 0.5), icon: '🧩' };
+        return { type: 'logica', ...q, options: q.options.sort(() => Math.random() - 0.5) };
       };
 
       const generateQuestion = () => questionNumber % 2 === 1 ? generateCalculoQuestion() : generateLogicQuestion();
@@ -132,23 +129,22 @@
         setGamePin(Math.random().toString(36).substring(2, 8).toUpperCase());
       };
 
-      const generateQRSvg = () => `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(window.location.href)}`;
-
       if (mode === 'selectMode') {
-        return React.createElement('div', { className: 'min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4' },
-          React.createElement('div', { className: 'bg-white rounded-lg shadow-2xl p-8 max-w-md w-full text-center' },
-            React.createElement('h1', { className: 'text-4xl font-bold mb-4' }, 'MathGame'),
-            React.createElement('button', { onClick: () => setMode('profesorMenu'), className: 'w-full bg-blue-500 text-white py-4 rounded-lg mb-4 font-bold' }, '📺 Profesorado'),
-            React.createElement('button', { onClick: () => setMode('alumnoMenu'), className: 'w-full bg-green-500 text-white py-4 rounded-lg font-bold' }, '📱 Alumnado')
+        return React.createElement('div', { className: 'min-h-screen flex items-center justify-center bg-gray-100' },
+          React.createElement('div', { className: 'bg-white p-8 rounded shadow-lg text-center' },
+            React.createElement('h1', { className: 'text-4xl font-bold mb-6' }, 'MathGame'),
+            React.createElement('button', { onClick: () => setMode('profesorMenu'), className: 'w-full bg-blue-500 text-white py-3 rounded mb-4 font-bold' }, 'Profesorado'),
+            React.createElement('button', { onClick: () => setMode('alumnoMenu'), className: 'w-full bg-green-500 text-white py-3 rounded font-bold' }, 'Alumnado')
           )
         );
       }
 
-      return React.createElement('div', null, 'Pantallas adicionales aquí...');
-    }
-
-    ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(MathGame));
-  </script>
-</body>
-</html>
-```
+      if (mode === 'profesorMenu') {
+        return React.createElement('div', { className: 'min-h-screen flex items-center justify-center bg-gray-100' },
+          React.createElement('div', { className: 'bg-white p-8 rounded shadow-lg w-full max-w-md' },
+            React.createElement('h2', { className: 'text-2xl font-bold mb-4' }, 'Configuración'),
+            React.createElement('p', { className: 'mb-4 text-center font-bold text-xl' }, `PIN: ${gamePin}`),
+            React.createElement('label', null, `Número de equipos: ${numTeams}`),
+            React.createElement('input', { type: 'range', min: 2, max: 6, value: numTeams, onChange: e => setNumTeams(parseInt(e.target.value)), className: 'w-full mb-4' }),
+            React.createElement('div', { className: 'mb-4' },
+              ['facil', 'media', 'dific
