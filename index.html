@@ -30,4 +30,360 @@
         const icons = {
           trophy: `<svg class="icon mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>`,
           users: `<svg class="icon mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>`,
-          clock: `<svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linej
+          clock: `<svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`,
+          calculator: `<svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>`,
+          target: `<svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
+          brain: `<svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>`,
+          monitor: `<svg class="icon mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>`
+        };
+
+        class App {
+          constructor() {
+            this.view = 'select';
+            this.selectedTeam = null;
+            this.scores = this.loadScores();
+            this.currentChallenge = null;
+            this.answer = '';
+            this.feedback = '';
+            this.timeLeft = 0;
+            this.isActive = false;
+            this.timerInterval = null;
+            this.syncInterval = null;
+            this.render();
+            this.startSync();
+          }
+
+          loadScores() {
+            const saved = localStorage.getItem('math-scores');
+            if (saved) return JSON.parse(saved);
+            const initial = {};
+            TEAMS.forEach(t => initial[t.id] = 0);
+            return initial;
+          }
+
+          saveScores() {
+            localStorage.setItem('math-scores', JSON.stringify(this.scores));
+            window.dispatchEvent(new Event('storage'));
+          }
+
+          startSync() {
+            this.syncInterval = setInterval(() => {
+              const saved = localStorage.getItem('math-scores');
+              if (saved) {
+                this.scores = JSON.parse(saved);
+                if (this.view === 'display') this.render();
+              }
+            }, 1000);
+          }
+
+          updateScore(teamId, points) {
+            this.scores[teamId] = (this.scores[teamId] || 0) + points;
+            this.saveScores();
+          }
+
+          resetScores() {
+            TEAMS.forEach(t => this.scores[t.id] = 0);
+            this.saveScores();
+            this.render();
+          }
+
+          generateMathChallenge() {
+            const ops = [
+              { type: '+', min: 5, max: 50, points: 10 },
+              { type: '-', min: 5, max: 50, points: 10 },
+              { type: '×', min: 2, max: 12, points: 15 },
+              { type: '÷', min: 2, max: 10, points: 15 }
+            ];
+            const op = ops[Math.floor(Math.random() * ops.length)];
+            let a, b, result;
+            
+            if (op.type === '÷') {
+              b = Math.floor(Math.random() * (op.max - op.min + 1)) + op.min;
+              result = Math.floor(Math.random() * 10) + 1;
+              a = b * result;
+            } else {
+              a = Math.floor(Math.random() * (op.max - op.min + 1)) + op.min;
+              b = Math.floor(Math.random() * (op.max - op.min + 1)) + op.min;
+              if (op.type === '+') result = a + b;
+              else if (op.type === '-') {
+                if (a < b) [a, b] = [b, a];
+                result = a - b;
+              } else if (op.type === '×') result = a * b;
+            }
+            
+            return { type: 'math', question: `${a} ${op.type} ${b}`, answer: result, points: op.points };
+          }
+
+          generateSequenceChallenge() {
+            const patterns = [
+              { next: 10, desc: '2, 4, 6, 8, ?' },
+              { next: 9, desc: '1, 3, 5, 7, ?' },
+              { next: 25, desc: '5, 10, 15, 20, ?' },
+              { next: 50, desc: '10, 20, 30, 40, ?' },
+              { next: 15, desc: '3, 6, 9, 12, ?' },
+              { next: 32, desc: '2, 4, 8, 16, ?' },
+              { next: 60, desc: '100, 90, 80, 70, ?' }
+            ];
+            const p = patterns[Math.floor(Math.random() * patterns.length)];
+            return { type: 'sequence', question: `¿Qué número sigue? ${p.desc}`, answer: p.next, points: 20 };
+          }
+
+          generateVisualChallenge() {
+            const challenges = [
+              { q: '🔴🔴🔵🔴🔴🔵🔴🔴 ¿Qué sigue?', opts: ['🔵', '🔴', '🟢', '🟡'], ans: '🔵' },
+              { q: '⭐⭐⭐🌙⭐⭐⭐🌙 ¿Qué sigue?', opts: ['🌙', '⭐', '☀️', '🌟'], ans: '⭐' },
+              { q: '🟥🟦🟦🟥🟦🟦 ¿Qué sigue?', opts: ['🟦', '🟥', '🟩', '🟨'], ans: '🟥' },
+              { q: '1️⃣2️⃣2️⃣3️⃣3️⃣3️⃣ ¿Qué sigue?', opts: ['1️⃣', '2️⃣', '3️⃣', '4️⃣'], ans: '4️⃣' },
+              { q: '🌕🌗🌑🌕🌗🌑 ¿Qué sigue?', opts: ['🌕', '🌗', '🌑', '🌘'], ans: '🌕' }
+            ];
+            const c = challenges[Math.floor(Math.random() * challenges.length)];
+            return { type: 'visual', question: c.q, options: c.opts, answer: c.ans, points: 25 };
+          }
+
+          startNewChallenge() {
+            const rand = Math.random();
+            if (rand < 0.4) this.currentChallenge = this.generateMathChallenge();
+            else if (rand < 0.7) this.currentChallenge = this.generateSequenceChallenge();
+            else this.currentChallenge = this.generateVisualChallenge();
+            
+            this.answer = '';
+            this.feedback = '';
+            this.timeLeft = TIME_LIMITS[this.currentChallenge.type];
+            this.isActive = true;
+            this.startTimer();
+            this.render();
+          }
+
+          startTimer() {
+            if (this.timerInterval) clearInterval(this.timerInterval);
+            this.timerInterval = setInterval(() => {
+              if (this.timeLeft > 0 && this.isActive) {
+                this.timeLeft--;
+                this.render();
+              } else if (this.timeLeft === 0 && this.isActive) {
+                this.isActive = false;
+                this.feedback = '⏱️ ¡Tiempo agotado!';
+                this.render();
+                setTimeout(() => this.startNewChallenge(), 2000);
+              }
+            }, 1000);
+          }
+
+          checkAnswer() {
+            if (!this.answer && this.currentChallenge.type !== 'visual') {
+              this.feedback = 'Escribe una respuesta';
+              this.render();
+              return;
+            }
+
+            this.isActive = false;
+            const isCorrect = this.currentChallenge.type === 'visual'
+              ? this.answer === this.currentChallenge.answer
+              : parseInt(this.answer) === this.currentChallenge.answer;
+
+            if (isCorrect) {
+              const bonus = this.timeLeft > TIME_LIMITS[this.currentChallenge.type] * 0.7 ? 5 : 0;
+              const total = this.currentChallenge.points + bonus;
+              this.updateScore(this.selectedTeam.id, total);
+              this.feedback = `¡CORRECTO! +${total} puntos ${bonus > 0 ? '🚀 ¡Bonus!' : '🎉'}`;
+              this.render();
+              setTimeout(() => this.startNewChallenge(), 2000);
+            } else {
+              this.feedback = '❌ Incorrecto. ¡Inténtalo de nuevo!';
+              this.render();
+              setTimeout(() => {
+                this.feedback = '';
+                this.timeLeft = TIME_LIMITS[this.currentChallenge.type];
+                this.isActive = true;
+                this.startTimer();
+                this.render();
+              }, 2000);
+            }
+          }
+
+          getTimeColor() {
+            if (!this.currentChallenge) return 'text-green-400';
+            const pct = (this.timeLeft / TIME_LIMITS[this.currentChallenge.type]) * 100;
+            return pct > 60 ? 'text-green-400' : pct > 30 ? 'text-yellow-400' : 'text-red-400';
+          }
+
+          render() {
+            const app = document.getElementById('app');
+            
+            if (this.view === 'select') {
+              app.innerHTML = `
+                <div class="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-600 p-4">
+                  <div class="max-w-4xl mx-auto pt-12">
+                    <div class="text-center mb-12">
+                      <h1 class="text-5xl md:text-6xl font-bold text-white mb-4">🏆 Competición Matemática 🏆</h1>
+                      <p class="text-xl text-blue-100">Elige tu opción</p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <button onclick="app.view='team-select';app.render()" class="bg-white rounded-2xl p-8 shadow-2xl hover:scale-105 transition-transform">
+                        ${icons.users}
+                        <h2 class="text-3xl font-bold text-gray-800 mb-2 mt-4">Jugar</h2>
+                        <p class="text-gray-600">Móviles - Selecciona equipo</p>
+                      </button>
+                      <button onclick="app.view='display';app.render()" class="bg-white rounded-2xl p-8 shadow-2xl hover:scale-105 transition-transform">
+                        ${icons.monitor}
+                        <h2 class="text-3xl font-bold text-gray-800 mb-2 mt-4">Pantalla PDI</h2>
+                        <p class="text-gray-600">Ver clasificación en grande</p>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }
+            
+            else if (this.view === 'team-select') {
+              app.innerHTML = `
+                <div class="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-600 p-4">
+                  <div class="max-w-4xl mx-auto pt-8">
+                    <button onclick="app.view='select';app.render()" class="mb-6 text-white text-lg hover:underline">← Volver</button>
+                    <div class="text-center mb-8">
+                      <h1 class="text-4xl font-bold text-white mb-4">Selecciona tu Equipo</h1>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      ${TEAMS.map(team => `
+                        <button onclick="app.selectTeam(${team.id})" class="${team.color} rounded-2xl p-6 shadow-2xl hover:scale-105 transition-transform">
+                          <div class="text-white text-center">
+                            ${icons.users}
+                            <h2 class="text-2xl font-bold my-2">${team.name}</h2>
+                            <p class="text-xl font-semibold">${this.scores[team.id] || 0} puntos</p>
+                          </div>
+                        </button>
+                      `).join('')}
+                    </div>
+                  </div>
+                </div>
+              `;
+            }
+            
+            else if (this.view === 'game' && this.currentChallenge) {
+              const team = this.selectedTeam;
+              const ch = this.currentChallenge;
+              app.innerHTML = `
+                <div class="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-600 p-4">
+                  <div class="max-w-2xl mx-auto pt-4">
+                    <button onclick="app.view='team-select';app.isActive=false;app.render()" class="mb-4 text-white text-lg hover:underline">← Cambiar equipo</button>
+                    <div class="${team.color} rounded-2xl p-6 shadow-2xl mb-6">
+                      <div class="flex items-center justify-between text-white">
+                        <div>
+                          <h2 class="text-2xl font-bold">${team.name}</h2>
+                          <p class="text-xl">Puntuación: ${this.scores[team.id] || 0}</p>
+                        </div>
+                        ${icons.trophy}
+                      </div>
+                    </div>
+                    <div class="bg-white rounded-2xl p-8 shadow-2xl">
+                      <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center gap-2">
+                          ${ch.type === 'math' ? icons.calculator : ch.type === 'sequence' ? icons.target : icons.brain}
+                          <span class="text-sm font-semibold text-gray-600 uppercase">
+                            ${ch.type === 'math' ? 'Matemáticas' : ch.type === 'sequence' ? 'Secuencias' : 'Lógica Visual'}
+                          </span>
+                        </div>
+                        <div class="flex items-center gap-2 ${this.getTimeColor()} font-bold text-2xl">
+                          ${icons.clock}
+                          <span>${this.timeLeft}s</span>
+                        </div>
+                      </div>
+                      <div class="mb-6">
+                        <h3 class="text-3xl font-bold text-gray-800 text-center mb-4">${ch.question}</h3>
+                        <div class="text-center text-lg text-gray-600">Vale ${ch.points} puntos</div>
+                      </div>
+                      ${ch.type === 'visual' ? `
+                        <div class="grid grid-cols-2 gap-4 mb-6">
+                          ${ch.options.map(opt => `
+                            <button onclick="app.answer='${opt}';app.checkAnswer()" 
+                              class="p-8 text-6xl rounded-xl border-4 ${this.answer === opt ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-300'}">
+                              ${opt}
+                            </button>
+                          `).join('')}
+                        </div>
+                      ` : `
+                        <div class="mb-6">
+                          <input type="number" id="answerInput" 
+                            class="w-full p-4 text-3xl text-center border-4 border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
+                            placeholder="Tu respuesta" 
+                            onkeypress="if(event.key==='Enter')app.checkAnswer()"
+                            oninput="app.answer=this.value">
+                        </div>
+                        <button onclick="app.checkAnswer()" 
+                          class="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-4 rounded-xl text-2xl font-bold hover:from-blue-600 hover:to-purple-600 transition-all shadow-lg">
+                          Comprobar Respuesta
+                        </button>
+                      `}
+                      ${this.feedback ? `
+                        <div class="mt-6 p-4 rounded-xl text-center text-xl font-bold ${
+                          this.feedback.includes('CORRECTO') ? 'bg-green-100 text-green-800' :
+                          this.feedback.includes('Tiempo') ? 'bg-orange-100 text-orange-800' : 'bg-red-100 text-red-800'
+                        }">
+                          ${this.feedback}
+                        </div>
+                      ` : ''}
+                    </div>
+                  </div>
+                </div>
+              `;
+              if (ch.type !== 'visual') {
+                setTimeout(() => document.getElementById('answerInput')?.focus(), 100);
+              }
+            }
+            
+            else if (this.view === 'display') {
+              const sorted = [...TEAMS].sort((a, b) => (this.scores[b.id] || 0) - (this.scores[a.id] || 0));
+              app.innerHTML = `
+                <div class="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-8">
+                  <div class="max-w-7xl mx-auto">
+                    <div class="text-center mb-12">
+                      <h1 class="text-7xl font-bold text-white mb-4 flex items-center justify-center gap-4">
+                        ${icons.trophy} Competición Matemática ${icons.trophy}
+                      </h1>
+                      <p class="text-3xl text-blue-200 pulse-slow">🔥 Clasificación en Tiempo Real 🔥</p>
+                    </div>
+                    <div class="grid grid-cols-1 gap-6 mb-8">
+                      ${sorted.map((team, idx) => `
+                        <div class="${team.color} rounded-3xl p-8 shadow-2xl transform hover:scale-105 transition-transform">
+                          <div class="flex items-center justify-between text-white">
+                            <div class="flex items-center gap-6">
+                              <div class="text-6xl font-bold bg-white bg-opacity-20 rounded-full w-20 h-20 flex items-center justify-center">
+                                ${idx + 1}
+                              </div>
+                              <h3 class="text-4xl font-bold">${team.name}</h3>
+                            </div>
+                            <div class="text-right">
+                              <div class="text-6xl font-bold">${this.scores[team.id] || 0}</div>
+                              <div class="text-2xl opacity-90">puntos</div>
+                            </div>
+                          </div>
+                        </div>
+                      `).join('')}
+                    </div>
+                    <div class="text-center">
+                      <button onclick="if(confirm('¿Reiniciar puntuaciones?'))app.resetScores()" 
+                        class="bg-red-500 hover:bg-red-600 text-white px-8 py-4 rounded-xl text-xl font-bold shadow-lg transition-colors">
+                        Reiniciar Puntuaciones
+                      </button>
+                      <button onclick="app.view='select';app.render()" 
+                        class="ml-4 bg-gray-500 hover:bg-gray-600 text-white px-8 py-4 rounded-xl text-xl font-bold shadow-lg transition-colors">
+                        Volver al Menú
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }
+          }
+
+          selectTeam(teamId) {
+            this.selectedTeam = TEAMS.find(t => t.id === teamId);
+            this.view = 'game';
+            this.startNewChallenge();
+          }
+        }
+
+        const app = new App();
+    </script>
+</body>
+</html>
