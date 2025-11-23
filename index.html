@@ -158,8 +158,8 @@
                         e('h1', { className: 'text-4xl font-bold text-center mb-2 text-gray-800' }, 'MathGame'),
                         e('p', { className: 'text-center text-gray-600 mb-8' }, '¡Cálculo, lógica y acertijos! Todos juegan a la vez'),
                         e('div', { className: 'space-y-4 mb-8' },
-                            e('button', { onClick: () => setMode('profesorMenu'), className: 'w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-4 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition' }, '📺 Soy Profesor'),
-                            e('button', { onClick: () => setMode('alumnoMenu'), className: 'w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition' }, '📱 Soy Alumno')
+                            e('button', { onClick: () => setMode('profesorMenu'), className: 'w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-4 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition' }, '📺 Soy Profesorado'),
+                            e('button', { onClick: () => setMode('alumnoMenu'), className: 'w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition' }, '📱 Soy Alumnado')
                         ),
                         e('div', { className: 'border-t-2 border-gray-300 pt-6' },
                             e('p', { className: 'text-center text-sm text-gray-600 mb-4' }, '📱 QR para compartir con los alumnos'),
@@ -177,7 +177,7 @@
             if (mode === 'profesorMenu') {
                 return e('div', { className: 'min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4' },
                     e('div', { className: 'bg-white rounded-lg shadow-2xl p-8 max-w-md w-full' },
-                        e('h1', { className: 'text-3xl font-bold text-center mb-6 text-gray-800' }, 'Configuración Profesor'),
+                        e('h1', { className: 'text-3xl font-bold text-center mb-6 text-gray-800' }, 'Configuración Profesorado'),
                         e('div', { className: 'bg-yellow-100 border-4 border-yellow-400 p-4 rounded-lg mb-6 text-center' },
                             e('p', { className: 'text-sm text-gray-600' }, 'Código de sesión'),
                             e('p', { className: 'text-4xl font-bold text-yellow-600' }, gamePin),
