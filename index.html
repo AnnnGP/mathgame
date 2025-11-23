@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MathGame - Competencia Matemática</title>
+    <title>MathGame - Competencia Matemática Sincronizada</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -17,27 +17,494 @@
     
     <script>
         const e = React.createElement;
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useCallback } = React;
+
+        const GAME_KEY = 'MathGameSessionState';
+
+        /**
+         * Hook personalizado para gestionar el estado y la sincronización a través de localStorage
+         */
+        const useLocalStorageSync = (initialMode) => {
+            
+            // Función para obtener el estado del localStorage
+            const getInitialState = (key, defaultState) => {
+                try {
+                    const stored = localStorage.getItem(key);
+                    return stored ? JSON.parse(stored) : defaultState;
+                } catch (error) {
+                    console.error("Error leyendo localStorage:", error);
+                    return defaultState;
+                }
+            };
+            
+            // Estado principal, inicializado desde localStorage si existe
+            const [state, setState] = useState(() => {
+                const storedState = getInitialState(GAME_KEY, {});
+                return {
+                    mode: storedState.mode || initialMode,
+                    teams: storedState.teams || [],
+                    difficulty: storedState.difficulty || 'media',
+                    currentQuestion: storedState.currentQuestion || null,
+                    teamAnswers: storedState.teamAnswers || {},
+                    showResults: storedState.showResults || false,
+                    questionNumber: storedState.questionNumber || 1,
+                    timeLeft: storedState.timeLeft || 20,
+                    totalQuestions: storedState.totalQuestions || 10,
+                    numTeams: storedState.numTeams || 3,
+                    teamId: storedState.teamId || null, // Se mantiene local para el alumno
+                    alumnoRespuesta: storedState.alumnoRespuesta || null // Se mantiene local para el alumno
+                };
+            });
+
+            // Función para actualizar el estado y guardarlo en localStorage
+            const updateState = (newState) => {
+                setState(prevState => {
+                    const updatedState = { ...prevState, ...newState };
+                    
+                    // Solo guardamos el estado COMPARTIDO en localStorage
+                    const sharedState = {
+                        mode: updatedState.mode,
+                        teams: updatedState.teams,
+                        difficulty: updatedState.difficulty,
+                        currentQuestion: updatedState.currentQuestion,
+                        teamAnswers: updatedState.teamAnswers,
+                        showResults: updatedState.showResults,
+                        questionNumber: updatedState.questionNumber,
+                        timeLeft: updatedState.timeLeft,
+                        totalQuestions: updatedState.totalQuestions,
+                        numTeams: updatedState.numTeams,
+                    };
+                    localStorage.setItem(GAME_KEY, JSON.stringify(sharedState));
+                    return updatedState;
+                });
+            };
+
+            // Efecto para escuchar cambios en localStorage desde OTRAS pestañas
+            useEffect(() => {
+                const handleStorageChange = (event) => {
+                    if (event.key === GAME_KEY && event.newValue) {
+                        const newState = JSON.parse(event.newValue);
+                        // El alumno y profesor actualizan su estado compartido desde otras pestañas
+                        setState(prevState => ({
+                            ...prevState,
+                            // Mantenemos teamId y alumnoRespuesta locales para cada dispositivo
+                            mode: newState.mode,
+                            teams: newState.teams,
+                            currentQuestion: newState.currentQuestion,
+                            teamAnswers: newState.teamAnswers,
+                            showResults: newState.showResults,
+                            questionNumber: newState.questionNumber,
+                            timeLeft: newState.timeLeft,
+                            totalQuestions: newState.totalQuestions,
+                            numTeams: newState.numTeams,
+                        }));
+                    }
+                };
+
+                window.addEventListener('storage', handleStorageChange);
+                return () => window.removeEventListener('storage', handleStorageChange);
+            }, []);
+
+            return [state, updateState];
+        };
 
         function MathGame() {
             // FUNCIÓN: Leer el modo de la URL
             const getUrlMode = () => {
                 const params = new URLSearchParams(window.location.search);
                 const role = params.get('r');
-                // Si el modo es 'alumno', salta directamente a la selección de equipo
                 if (role === 'profesor') return 'profesorMenu';
                 if (role === 'alumno') return 'selectTeam';
                 return 'selectMode';
             };
 
-            const [mode, setMode] = useState(getUrlMode());
-            const [teams, setTeams] = useState([]);
-            const [numTeams, setNumTeams] = useState(3); 
-            const [difficulty, setDifficulty] = useState('media');
-            const [currentQuestion, setCurrentQuestion] = useState(null);
-            const [teamAnswers, setTeamAnswers] = useState({});
-            const [showResults, setShowResults] = useState(false);
-            const [questionNumber, setQuestionNumber] = useState(1);
-            const [timeLeft, setTimeLeft] = useState(20);
-            const [totalQuestions, setTotalQuestions] = useState(10);
-            const [teamId, setTeamId] = useState(null); // ID del equipo seleccionado por el alumno
+            const initialMode = getUrlMode();
+            const [state, updateState] = useLocalStorageSync(initialMode);
+            const { 
+                mode, teams, numTeams, difficulty, currentQuestion, 
+                teamAnswers, showResults, questionNumber, timeLeft, 
+                totalQuestions, teamId, alumnoRespuesta 
+            } = state;
+
+
+            // Efecto para gestionar el temporizador (Solo para Profesor)
+            useEffect(() => {
+                if (mode === 'profesorPlaying' && !showResults && timeLeft > 0) {
+                    const timer = setTimeout(() => {
+                        updateState({ timeLeft: timeLeft - 1 });
+                    }, 1000);
+                    return () => clearTimeout(timer);
+                }
+                if (timeLeft === 0 && !showResults && mode === 'profesorPlaying') {
+                    updateState({ showResults: true });
+                }
+            }, [timeLeft, mode, showResults, updateState]);
+
+            // --- LÓGICA DEL JUEGO (Mantiene la estructura, solo llama a updateState) ---
+
+            const generateCalculoQuestion = useCallback(() => {
+                let a = Math.floor(Math.random() * (difficulty === 'facil' ? 20 : difficulty === 'media' ? 50 : 100)) + 1;
+                let b = Math.floor(Math.random() * (difficulty === 'facil' ? 20 : difficulty === 'media' ? 50 : 100)) + 1;
+                const operations = ['+', '-', '×', '÷'];
+                const op = operations[Math.floor(Math.random() * operations.length)];
+                
+                let answer;
+                if (op === '+') answer = a + b;
+                else if (op === '-') { 
+                    answer = Math.abs(a - b); 
+                    if (a < b) [a, b] = [b, a]; 
+                }
+                else if (op === '×') answer = a * b;
+                else { 
+                    const divisor = b || 1;
+                    const result = Math.floor(a / divisor);
+                    a = result * divisor;
+                    answer = result;
+                }
+
+                const options = [answer];
+                while (options.length < 4) {
+                    const wrong = answer + (Math.random() > 0.5 ? 1 : -1) * (Math.floor(Math.random() * (difficulty === 'facil' ? 5 : 10)) + 1);
+                    if (!options.includes(wrong) && wrong > 0) options.push(wrong);
+                }
+
+                return { type: 'calculo', question: `${a} ${op} ${b}`, answer, options: options.sort(() => Math.random() - 0.5), icon: '🧮' };
+            }, [difficulty]);
+
+            const generateLogicQuestion = useCallback(() => {
+                const questions = [
+                    { question: 'Si 2+2=5, 3+3=7, 4+4=?', answer: 9, options: [8, 9, 10, 11], hint: 'Mira el patrón' },
+                    { question: 'Un caracol sube 3m de día y baja 2m de noche. ¿Cuántos días tarda en subir 10m?', answer: 8, options: [8, 9, 10, 12], hint: 'Piensa en el último día' },
+                    { question: '¿Cuántas veces cabe el número 1 en el número 11?', answer: 2, options: [1, 2, 3, 11], hint: 'Cuenta con cuidado' },
+                    { question: 'Si un cuadrado tiene 4 lados, ¿cuántos lados tiene el ángulo de un cuadrado?', answer: 0, options: [0, 1, 2, 4], hint: 'Un ángulo no es una forma' },
+                    { question: 'Juan tiene 5 manzanas. Da 2 a María. ¿Cuántas le quedan?', answer: 3, options: [1, 2, 3, 5], hint: 'Resta simple' },
+                    { question: '¿Cuál es el siguiente número? 2, 4, 8, 16, ?', answer: 32, options: [24, 28, 32, 64], hint: 'Se multiplica por 2' }
+                ];
+                const q = questions[Math.floor(Math.random() * questions.length)];
+                return { type: 'logica', ...q, icon: '🧩' };
+            }, []);
+
+            const generateQuestion = useCallback(() => questionNumber % 2 === 1 ? generateCalculoQuestion() : generateLogicQuestion(), [questionNumber, generateCalculoQuestion, generateLogicQuestion]);
+
+
+            const initGame = () => {
+                const newTeams = Array(numTeams).fill(0).map((_, i) => ({ id: i, name: `Equipo ${i + 1}`, score: 0 }));
+                updateState({
+                    teams: newTeams,
+                    teamAnswers: {},
+                    questionNumber: 1,
+                    currentQuestion: generateQuestion(),
+                    timeLeft: 20,
+                    showResults: false,
+                    mode: 'profesorPlaying'
+                });
+            };
+
+            const setNumTeamsLocal = (count) => {
+                updateState({ numTeams: count });
+            }
+
+            const setDifficultyLocal = (level) => {
+                updateState({ difficulty: level });
+            }
+            
+            const setTotalQuestionsLocal = (count) => {
+                updateState({ totalQuestions: count });
+            }
+
+            // Unirse después de la selección del alumno
+            const selectAndJoinTeam = (id) => {
+                updateState({ teamId: id, mode: 'alumnoPlaying' });
+            };
+
+            // La respuesta del alumno es LOCAL hasta que pulsa ENVIAR
+            const handleAlumnoAnswer = (option) => updateState({ alumnoRespuesta: option });
+
+            const enviarRespuesta = () => {
+                if (alumnoRespuesta !== null) {
+                    // El alumno envía su respuesta, que se mezcla con el estado global de respuestas
+                    updateState({ 
+                        teamAnswers: { ...teamAnswers, [teamId]: alumnoRespuesta },
+                        alumnoRespuesta: null 
+                    }); 
+                }
+            };
+
+            const nextQuestion = () => {
+                const newTeams = teams.map(team => {
+                    const teamAnswer = teamAnswers[team.id];
+                    if (teamAnswer === currentQuestion.answer) {
+                        const points = difficulty === 'facil' ? 10 : difficulty === 'media' ? 20 : 30;
+                        return { ...team, score: team.score + points };
+                    }
+                    return team;
+                });
+                
+                if (questionNumber >= totalQuestions) {
+                    updateState({ mode: 'resultados', teams: newTeams });
+                } else {
+                    updateState({
+                        teams: newTeams,
+                        teamAnswers: {},
+                        questionNumber: questionNumber + 1,
+                        currentQuestion: generateQuestion(),
+                        timeLeft: 20,
+                        showResults: false,
+                        alumnoRespuesta: null, 
+                    });
+                }
+            };
+
+            const salir = () => {
+                // Limpiar todo, incluida la clave de localStorage
+                localStorage.removeItem(GAME_KEY);
+                updateState({
+                    mode: 'selectMode',
+                    teams: [],
+                    teamAnswers: {},
+                    questionNumber: 1,
+                    teamId: null,
+                    alumnoRespuesta: null,
+                    currentQuestion: null,
+                });
+                window.history.pushState({}, '', window.location.pathname);
+            };
+
+            const generateRoleUrl = (role) => {
+                const baseURL = window.location.origin + window.location.pathname;
+                return `${baseURL}?r=${role}`;
+            };
+
+            const copyToClipboard = (text) => {
+                navigator.clipboard.writeText(text).then(() => {
+                    alert('URL copiada al portapapeles.');
+                }).catch(err => {
+                    console.error('Error al copiar: ', err);
+                });
+            };
+            
+            // --- VISTAS DEL JUEGO ---
+
+            // PANTALLA INICIAL (Acceso por URLs)
+            if (mode === 'selectMode') {
+                const urlProfesor = generateRoleUrl('profesor');
+                const urlAlumno = generateRoleUrl('alumno');
+
+                return e('div', { className: 'min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4' },
+                    e('div', { className: 'bg-white rounded-lg shadow-2xl p-8 max-w-lg w-full' },
+                        e('h1', { className: 'text-4xl font-bold text-center mb-2 text-gray-800' }, 'MathGame'),
+                        e('p', { className: 'text-center text-gray-600 mb-8' }, '¡Acceso directo por URL!'),
+                        
+                        e('div', { className: 'space-y-6' },
+                            e('div', { className: 'bg-blue-50 border-2 border-blue-300 p-4 rounded-lg' },
+                                e('p', { className: 'font-bold text-lg mb-2 text-blue-700' }, '🔗 URL Profesorado (Tú)'),
+                                e('p', { className: 'text-xs text-gray-600 truncate mb-3' }, urlProfesor),
+                                e('button', { onClick: () => copyToClipboard(urlProfesor), className: 'w-full bg-blue-500 text-white py-2 rounded-lg font-semibold hover:bg-blue-600 transition' }, 'Copiar URL Profesor')
+                            ),
+                            e('div', { className: 'bg-green-50 border-2 border-green-300 p-4 rounded-lg' },
+                                e('p', { className: 'font-bold text-lg mb-2 text-green-700' }, '🔗 URL Alumnado (Ellos)'),
+                                e('p', { className: 'text-xs text-gray-600 truncate mb-3' }, urlAlumno),
+                                e('button', { onClick: () => copyToClipboard(urlAlumno), className: 'w-full bg-green-500 text-white py-2 rounded-lg font-semibold hover:bg-green-600 transition' }, 'Copiar URL y compartir')
+                            ),
+                            e('hr', { className: 'border-gray-200' }),
+                            e('p', { className: 'text-sm text-center text-gray-500' }, 'O selecciona tu rol directamente:'),
+                            e('div', { className: 'flex justify-between gap-4' },
+                                e('button', { onClick: () => updateState({ mode: 'profesorMenu' }), className: 'w-1/2 bg-blue-500 text-white py-4 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition' }, '📺 Soy Profesorado'),
+                                e('button', { onClick: () => updateState({ mode: 'selectTeam' }), className: 'w-1/2 bg-green-500 text-white py-4 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition' }, '📱 Soy Alumnado')
+                            )
+                        )
+                    )
+                );
+            }
+
+            // MENÚ PROFESOR
+            if (mode === 'profesorMenu') {
+                return e('div', { className: 'min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4' },
+                    e('div', { className: 'bg-white rounded-lg shadow-2xl p-8 max-w-md w-full' },
+                        e('h1', { className: 'text-3xl font-bold text-center mb-6 text-gray-800' }, 'Configuración Profesorado'),
+                        e('p', { className: 'text-center text-red-500 mb-6 font-semibold' }, '¡Recuerda compartir la URL de Alumnado antes de iniciar!'),
+                        e('div', { className: 'space-y-6' },
+                            e('div', null,
+                                e('label', { className: 'block text-sm font-semibold text-gray-700 mb-2' }, `Número de equipos: ${numTeams}`),
+                                e('input', { type: 'range', min: '2', max: '6', value: numTeams, onChange: (evt) => setNumTeamsLocal(parseInt(evt.target.value)), className: 'w-full h-2 bg-gray-300 rounded-lg' })
+                            ),
+                            e('div', null,
+                                e('label', { className: 'block text-sm font-semibold text-gray-700 mb-2' }, 'Dificultad:'),
+                                e('div', { className: 'space-y-2' },
+                                    ['facil', 'media', 'dificil'].map(level => e('button', { key: level, onClick: () => setDifficultyLocal(level), className: `w-full py-2 px-4 rounded-lg font-semibold transition ${difficulty === level ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}` }, level === 'facil' ? 'Fácil' : level === 'media' ? 'Media' : 'Difícil'))
+                                )
+                            ),
+                            e('div', null,
+                                e('label', { className: 'block text-sm font-semibold text-gray-700 mb-2' }, `Número de preguntas: ${totalQuestions}`),
+                                e('input', { type: 'range', min: '5', max: '30', step: '5', value: totalQuestions, onChange: (evt) => setTotalQuestionsLocal(parseInt(evt.target.value)), className: 'w-full h-2 bg-gray-300 rounded-lg' })
+                            ),
+                            e('button', { onClick: initGame, className: 'w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-3 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition' }, '▶️ Comenzar Juego'),
+                            e('button', { onClick: salir, className: 'w-full bg-gray-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-gray-600 transition' }, 'Volver')
+                        )
+                    )
+                );
+            }
+
+            // VISTA: SELECCIÓN DE EQUIPO
+            if (mode === 'selectTeam') {
+                // Aseguramos que haya equipos creados para elegir
+                if (teams.length === 0) {
+                    const defaultTeams = Array(numTeams).fill(0).map((_, i) => ({ id: i, name: `Equipo ${i + 1}`, score: 0 }));
+                    // Actualizamos LOCALMENTE para que el alumno pueda ver los botones
+                    if (teams.length !== defaultTeams.length) {
+                         updateState({ teams: defaultTeams }); 
+                    }
+                }
+
+                return e('div', { className: 'min-h-screen bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center p-4' },
+                    e('div', { className: 'bg-white rounded-lg shadow-2xl p-8 max-w-2xl w-full text-center' },
+                        e('h1', { className: 'text-3xl font-bold mb-6 text-gray-800' }, 'Elige tu Equipo'),
+                        e('p', { className: 'text-lg text-gray-600 mb-8' }, 'Selecciona el equipo que representas para empezar a jugar. ¡Asegúrate de que solo un dispositivo por equipo responda!'),
+                        e('div', { className: 'grid gap-4', style: { gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' } },
+                            teams.map(team => e('button', { 
+                                key: team.id, 
+                                onClick: () => selectAndJoinTeam(team.id), 
+                                className: 'bg-indigo-500 text-white py-4 px-4 rounded-lg font-bold text-xl hover:bg-indigo-600 transition transform hover:scale-105'
+                            }, team.name))
+                        ),
+                        e('button', { onClick: salir, className: 'mt-8 w-full bg-gray-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-gray-600 transition' }, 'Salir')
+                    )
+                );
+            }
+
+
+            // PROFESOR JUGANDO
+            if (mode === 'profesorPlaying') {
+                const isLogic = currentQuestion?.type === 'logica';
+                return e('div', { className: 'min-h-screen bg-gradient-to-br from-indigo-500 to-pink-500 flex items-center justify-center p-4' },
+                    e('div', { className: 'bg-white rounded-lg shadow-2xl p-8 max-w-5xl w-full' },
+                        e('div', { className: 'flex justify-between items-center mb-6' },
+                            e('div', { className: 'text-center' },
+                                e('p', { className: 'text-sm font-semibold text-gray-600' }, 'Pregunta'),
+                                e('p', { className: 'text-3xl font-bold text-purple-600' }, `${questionNumber}/${totalQuestions}`)
+                            ),
+                            e('div', { className: 'text-center' },
+                                e('span', { className: 'text-3xl' }, currentQuestion?.icon),
+                                e('p', { className: 'text-sm font-semibold text-gray-600' }, isLogic ? '🧩 Lógica' : '🧮 Cálculo')
+                            ),
+                            e('div', { className: timeLeft > 10 ? 'text-green-600' : timeLeft > 5 ? 'text-yellow-600' : 'text-red-600', style: { textAlign: 'center' } },
+                                e('p', { className: 'text-4xl font-bold' }, `${timeLeft}s`)
+                            )
+                        ),
+                        e('div', { className: `rounded-lg p-8 mb-8 text-center border-4 ${isLogic ? 'bg-gradient-to-r from-purple-100 to-pink-100 border-purple-400' : 'bg-gradient-to-r from-yellow-100 to-yellow-50 border-yellow-400'}` },
+                            e('p', { className: `font-bold mb-4 ${isLogic ? 'text-2xl text-purple-800' : 'text-6xl text-gray-800'}` }, currentQuestion?.question),
+                            isLogic && e('p', { className: 'text-sm text-purple-600 italic' }, `💡 ${currentQuestion?.hint}`)
+                        ),
+                        e('div', { className: 'grid gap-3 mb-6', style: { gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' } },
+                            teams.map(team => e('div', { key: team.id, className: `p-4 rounded-lg text-center font-bold transition ${teamAnswers[team.id] ? 'bg-blue-500 text-white scale-105 border-4 border-blue-700' : 'bg-gray-300 text-gray-800'}` },
+                                e('p', { className: 'text-sm mb-1' }, team.name),
+                                e('p', { className: 'text-2xl' }, teamAnswers[team.id] || '---')
+                            ))
+                        ),
+                        showResults && e('div', { className: 'mt-8 p-4 bg-gray-100 rounded-lg border-4 border-gray-400' },
+                            e('p', { className: 'text-center font-bold text-xl mb-4' }, `✓ Respuesta correcta: ${currentQuestion?.answer}`),
+                            e('div', { className: 'grid gap-2 mb-6', style: { gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))' } },
+                                teams.map(team => {
+                                    const isCorrect = teamAnswers[team.id] === currentQuestion?.answer;
+                                    const pts = difficulty === 'facil' ? 10 : difficulty === 'media' ? 20 : 30;
+                                    return e('div', { key: team.id, className: `p-2 rounded text-center font-bold ${isCorrect ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}` },
+                                        e('p', { className: 'text-sm' }, team.name),
+                                        e('p', { className: 'text-lg' }, isCorrect ? `✓ +${pts}` : '✗')
+                                    );
+                                })
+                            ),
+                            e('div', { className: 'mb-6 p-4 bg-white rounded-lg border-2 border-gray-300' },
+                                e('p', { className: 'text-center font-bold text-gray-600 mb-3' }, 'PUNTUACIÓN ACTUAL'),
+                                e('div', { className: 'space-y-2' },
+                                    [...teams].sort((a, b) => b.score - a.score).map((team, idx) => e('div', { key: team.id, className: 'flex items-center justify-between px-3 py-2 bg-gradient-to-r from-blue-50 to-purple-50 rounded' },
+                                        e('span', { className: 'font-bold' }, `${idx + 1}. ${team.name}`),
+                                        e('span', { className: 'text-lg font-bold text-blue-600' }, `${team.score} pts`)
+                                    ))
+                                )
+                            ),
+                            e('button', { onClick: nextQuestion, className: 'w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-3 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition' }, 'Siguiente Pregunta →')
+                        ),
+                        e('button', { onClick: salir, className: 'mt-4 w-full bg-red-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-red-600 transition' }, 'Salir')
+                    )
+                );
+            }
+
+            // ALUMNO JUGANDO
+            if (mode === 'alumnoPlaying') {
+                const currentTeam = teams.find(t => t.id === teamId) || { name: `Equipo Desconocido (${teamId})` };
+                const teamName = currentTeam.name;
+                const hasAnswered = teamAnswers[teamId]; 
+
+                // Pantalla de espera
+                if (!currentQuestion || showResults) {
+                    const statusText = showResults ? 'Esperando resultados/próxima pregunta...' : 'Esperando a que el profesor inicie la partida...';
+                    return e('div', { className: 'min-h-screen bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center p-4' },
+                        e('div', { className: 'bg-white rounded-lg shadow-2xl p-8 max-w-2xl w-full text-center' },
+                            e('h1', { className: 'text-4xl font-bold mb-4 text-teal-600' }, teamName), 
+                            e('p', { className: 'text-xl mb-6 text-gray-700' }, statusText),
+                            e('div', { className: 'mt-8' },
+                                e('div', { className: 'animate-pulse rounded-full h-16 w-16 bg-teal-500 mx-auto' }),
+                                e('button', { onClick: salir, className: 'mt-8 w-full bg-red-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-red-600 transition' }, 'Salir')
+                            )
+                        )
+                    );
+                }
+
+                const isLogic = currentQuestion?.type === 'logica';
+
+                return e('div', { className: 'min-h-screen bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center p-4' },
+                    e('div', { className: 'bg-white rounded-lg shadow-2xl p-8 max-w-2xl w-full' },
+                        e('div', { className: 'flex justify-between items-center mb-6' },
+                            e('div', { className: 'text-center flex-1' },
+                                e('p', { className: 'text-sm font-semibold text-gray-600' }, 'Equipo'),
+                                e('p', { className: 'text-3xl font-bold text-teal-600' }, teamName)
+                            ),
+                            e('div', { className: 'text-center flex-1' },
+                                e('span', { className: 'text-3xl' }, currentQuestion?.icon),
+                                e('p', { className: 'text-sm font-semibold text-gray-600' }, isLogic ? '🧩 Lógica' : '🧮 Cálculo')
+                            ),
+                            e('div', { className: 'text-center flex-1' },
+                                e('p', { className: 'text-3xl font-bold text-red-600' }, `${timeLeft}s`)
+                            )
+                        ),
+                        e('div', { className: `rounded-lg p-8 mb-8 text-center border-4 ${isLogic ? 'bg-gradient-to-r from-purple-100 to-pink-100 border-purple-400' : 'bg-gradient-to-r from-yellow-100 to-yellow-50 border-yellow-400'}` },
+                            e('p', { className: `font-bold mb-4 ${isLogic ? 'text-2xl text-purple-800' : 'text-5xl text-gray-800'}` }, currentQuestion?.question),
+                            isLogic && e('p', { className: 'text-sm text-purple-600 italic' }, `💡 ${currentQuestion?.hint}`)
+                        ),
+                        e('div', { className: 'grid grid-cols-2 gap-4 mb-6' },
+                            currentQuestion?.options.map((option, idx) => e('button', { key: idx, onClick: () => handleAlumnoAnswer(option), disabled: hasAnswered, className: `text-white p-6 rounded-lg font-bold text-3xl transition transform ${alumnoRespuesta === option ? 'ring-4 ring-white scale-110 ' + (isLogic ? 'bg-gradient-to-br from-purple-600 to-purple-700' : 'bg-gradient-to-br from-blue-600 to-blue-700') : isLogic ? 'bg-gradient-to-br from-purple-500 to-purple-600' : 'bg-gradient-to-br from-blue-500 to-blue-600'} ${hasAnswered ? 'opacity-60 cursor-not-allowed' : 'hover:scale-105'}` }, option))
+                        ),
+                        alumnoRespuesta !== null ? 
+                            e('button', { onClick: enviarRespuesta, disabled: hasAnswered, className: `w-full ${hasAnswered ? 'bg-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-green-500 to-green-600 hover:shadow-lg'} text-white py-4 px-4 rounded-lg font-bold text-lg transition` }, hasAnswered ? 'Respuesta enviada' : '✓ Enviar Respuesta')
+                            : e('div', { className: 'w-full bg-gray-300 text-gray-700 py-4 px-4 rounded-lg font-bold text-lg text-center' }, 'Selecciona una respuesta')
+                    )
+                );
+            }
+
+            // RESULTADOS
+            if (mode === 'resultados') {
+                const sortedTeams = [...teams].sort((a, b) => b.score - a.score);
+                return e('div', { className: 'min-h-screen bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center p-4' },
+                    e('div', { className: 'bg-white rounded-lg shadow-2xl p-8 max-w-2xl w-full' },
+                        e('div', { className: 'text-center mb-8' },
+                            e('h1', { className: 'text-4xl font-bold text-gray-800' }, '¡RESULTADOS FINALES!')
+                        ),
+                        e('div', { className: 'space-y-4 mb-8' },
+                            sortedTeams.map((team, idx) => e('div', { key: team.id, className: `p-4 rounded-lg flex items-center justify-between font-bold text-lg ${idx === 0 ? 'bg-yellow-100 border-4 border-yellow-400' : idx === 1 ? 'bg-gray-100 border-4 border-gray-400' : 'bg-orange-100 border-4 border-orange-400'}` },
+                                e('span', null, `${idx + 1}º - ${team.name}`),
+                                e('span', { className: 'text-2xl' }, `${team.score} PUNTOS`)
+                            ))
+                        ),
+                        e('button', { onClick: salir, className: 'w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition' }, 'Volver al inicio')
+                    )
+                );
+            }
+
+            // Fallback
+            return e('div', null, 'Error: Modo de aplicación desconocido.');
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(e(MathGame));
+    </script>
+</body>
+</html>
