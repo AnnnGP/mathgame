@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MathGame - Competencia Matemática</title>
+    <!-- Librerías de React y Babel (necesario para compilar el JSX en el navegador) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Tailwind CSS para estilos -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        
+        // Componente principal del juego
+        function MathGame() {
+          const [mode, setMode] = useState('selectMode');
+          // Genera un PIN aleatorio
+          const [gamePin, setGamePin] = useState(Math.random().toString(36).substring(2, 8).toUpperCase());
+          const [inputPin, setInputPin] = useState('');
+          const [joinError, setJoinError] = useState(false); // Estado para error de PIN
+          
+          const [teams, setTeams] = useState([]);
+          const [numTeams, setNumTeams] = useState(2);
+          const [difficulty, setDifficulty] = useState('media');
+          const [currentQuestion, setCurrentQuestion] = useState(null);
+          const [teamAnswers, setTeamAnswers] = {}; 
+          const [showResults, setShowResults] = useState(false);
+          const [questionNumber, setQuestionNumber] = useState(1);
+          const [timeLeft, setTimeLeft] = useState(20);
+          const [totalQuestions, setTotalQuestions] = useState(10);
+          const [teamId, setTeamId] = useState(null);
+          const [alumnoRespuesta, setAlumnoRespuesta] = useState(null);
+
+          // Lógica del temporizador
+          useEffect(() => {
+            if ((mode === 'profesorPlaying' || mode === 'alumnoPlaying') && !showResults && timeLeft > 0) {
+              const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+              return () => clearTimeout(timer);
+            }
+            if (timeLeft === 0 && !showResults && (mode === 'profesorPlaying' || mode === 'alumnoPlaying')) {
+              setShowResults(true);
+            }
+          }, [timeLeft, mode, showResults]);
+
+          // --- Funciones de Generación de Preguntas ---
+
+          const generateCalculoQuestion = () => {
+            let a, b, operation, answer;
+            const operations = ['+', '-', '×', '÷'];
+            const selectedOp = operations[Math.floor(Math.random() * operations.length)];
+
+            // Determinar rango de números según la dificultad
+            let maxVal;
+            if (difficulty === 'facil') maxVal = 20;
+            else if (difficulty === 'media') maxVal = 50;
+            else maxVal = 100;
+
+            a = Math.floor(Math.random() * maxVal) + 1;
+            b = Math.floor(Math.random() * maxVal) + 1;
+
+            if (selectedOp === '+') {
+              answer = a + b;
+            } else if (selectedOp === '-') {
+              // Asegurar resultado positivo
+              if (a < b) [a, b] = [b, a];
+              answer = a - b;
+            } else if (selectedOp === '×') {
+              // Reducir rango para multiplicación en dificultad fácil/media
+              if (difficulty !== 'dificil') {
+                  a = Math.floor(Math.random() * 10) + 1;
+                  b = Math.floor(Math.random() * 10) + 1;
+              }
+              answer = a * b;
+            } else { // División '÷'
+              // Asegurar que la división tenga resultado entero
+              b = b !== 0 ? b : 1;
+              answer = Math.floor(a / b);
+              a = answer * b;
+              if (a === 0 && b > 0) a = b; // Evitar 0/x=0 a menos que sea necesario
+            }
+
+            // Generar opciones falsas
+            const options = [answer];
+            while (options.length < 4) {
+              // Generar una respuesta incorrecta cercana
+              let wrong = answer + (Math.random() > 0.5 ? 1 : -1) * (Math.floor(Math.random() * 5) + 1);
+              if (!options.includes(wrong) && wrong >= 0) options.push(wrong);
+            }
+
+            return {
+              type: 'calculo',
+              question: `${a} ${selectedOp} ${b}`,
+              answer: answer,
+              options: options.sort(() => Math.random() - 0.5),
+              icon: '🧮'
+            };
+          };
+
+          const generateLogicQuestion = () => {
+            const logicQuestions = [
+              { question: 'Si 2+2=5, 3+3=7, 4+4=?', answer: 9, options: [8, 9, 10, 11], hint: 'Mira el patrón: se suma 1 extra.' },
+              { question: 'Un caracol sube 3m de día y baja 2m de noche. ¿Cuántos días tarda en subir 10m?', answer: 8, options: [8, 9, 10, 12], hint: 'Al final, sube los últimos 3m en un día sin bajar.' },
+              { question: 'Si tienes 5 peces y 3 se ahogan, ¿cuántos quedan?', answer: 5, options: [2, 3, 5, 8], hint: 'Los peces no se ahogan.' },
+              { question: '¿Qué número sigue: 1, 1, 2, 3, 5, 8, ?', answer: 13, options: [11, 12, 13, 15], hint: 'Es la secuencia de Fibonacci.' },
+              { question: '¿Cuál es el número que, si lo inviertes, vale menos?', answer: 9, options: [6, 8, 9, 11], hint: 'El 9 invertido es 6.' },
+              { question: '¿Cuántos cuartos de pastel hay en dos pasteles y medio?', answer: 10, options: [8, 9, 10, 12], hint: 'Cada pastel tiene cuatro cuartos.' }
+            ];
+            
+            const q = logicQuestions[Math.floor(Math.random() * logicQuestions.length)];
+            return {
+              type: 'logica',
+              ...q,
+              options: q.options.sort(() => Math.random() - 0.5),
+              icon: '🧩'
+            };
+          };
+
+          const generateQuestion = () => {
+            // Alternar entre cálculo y lógica
+            const isCalculo = questionNumber % 2 === 1;
+            return isCalculo ? generateCalculoQuestion() : generateLogicQuestion();
+          };
+
+          // --- Lógica del Juego ---
+
+          // Iniciar el juego (Profesorado)
+          const initGameProfesor = () => {
+            const newTeams = Array(numTeams).fill(0).map((_, i) => ({
+              id: i,
+              name: `Equipo ${i + 1}`,
+              score: 0
+            }));
+            setTeams(newTeams);
+            setTeamAnswers({});
+            setQuestionNumber(1);
+            setCurrentQuestion(generateQuestion());
+            setTimeLeft(20);
+            setShowResults(false);
+            setMode('profesorPlaying');
+          };
+
+          // Unirse al juego (Alumnado)
+          const unirAlEquipo = () => {
+            setJoinError(false);
+            if (inputPin.toUpperCase() === gamePin) {
+              // Simulación: Asignar al Equipo 1 (0) para la demo
+              setTeamId(0); 
+              setMode('alumnoPlaying');
+            } else {
+              setJoinError(true); 
+              setInputPin('');
+            }
+          };
+
+          const handleAlumnoAnswer = (option) => {
+            setAlumnoRespuesta(option);
+          };
+
+          const enviarRespuesta = () => {
+            if (alumnoRespuesta !== null && teamId !== null) {
+              setTeamAnswers(prev => ({
+                ...prev,
+                [teamId]: alumnoRespuesta
+              }));
+              setAlumnoRespuesta(null);
+            }
+          };
+
+          const nextQuestion = () => {
+            if (questionNumber >= totalQuestions) {
+              setMode('resultados');
+            } else {
+              const newTeams = teams.map(team => {
+                const teamAnswer = teamAnswers[team.id];
+                if (teamAnswer === currentQuestion?.answer) {
+                  const points = difficulty === 'facil' ? 10 : difficulty === 'media' ? 20 : 30;
+                  return { ...team, score: team.score + points };
+                }
+                return team;
+              });
+              setTeams(newTeams);
+              setTeamAnswers({});
+              setQuestionNumber(questionNumber + 1);
+              setCurrentQuestion(generateQuestion());
+              setTimeLeft(20);
+              setShowResults(false);
+            }
+          };
+
+          const salir = () => {
+            // Resetear todo el estado
+            setMode('selectMode');
+            setTeams([]);
+            setTeamAnswers({});
+            setQuestionNumber(1);
+            setTeamId(null);
+            setAlumnoRespuesta(null);
+            // Generar un nuevo PIN para la siguiente sesión
+            setGamePin(Math.random().toString(36).substring(2, 8).toUpperCase());
+          };
+
+          // Generación de QR (usando API externa)
+          const generateQRSvg = () => {
+            const text = window.location.href;
+            const encodedText = encodeURIComponent(text);
+            return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodedText}`;
+          };
+
+          // Descarga del QR
+          const descargarQR = () => {
+            const link = document.createElement('a');
+            link.href = generateQRSvg();
+            link.download = 'MathGame_QR.png';
+            link.click();
+          };
+
+          // --- Renderizado de Vistas ---
+
+          // PANTALLA INICIAL (Select Mode)
+          if (mode === 'selectMode') {
+            return (
+              <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
+                <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full">
+                  <h1 className="text-4xl font-bold text-center mb-2 text-gray-800">MathGame</h1>
+                  <p className="text-center text-gray-600 mb-8">¡Cálculo, lógica y acertijos! Todos juegan a la vez</p>
+
+                  <div className="space-y-4 mb-8">
+                    <button
+                      onClick={() => setMode('profesorMenu')}
+                      className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-4 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition flex items-center justify-center gap-2"
+                    >
+                      📺 Profesorado
+                    </button>
+                    <button
+                      onClick={() => setMode('alumnoMenu')}
+                      className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition flex items-center justify-center gap-2"
+                    >
+                      📱 Alumnado
+                    </button>
+                  </div>
+
+                  <div className="border-t-2 border-gray-300 pt-6">
+                    <p className="text-center text-sm text-gray-600 mb-4">📱 QR para compartir con el alumnado</p>
+                    <div className="flex flex-col items-center gap-4">
+                      <img src={generateQRSvg()} alt="MathGame QR" className="w-32 h-32 border-2 border-gray-300 p-2 bg-white rounded" />
+                      <button
+                        onClick={descargarQR}
+                        className="bg-gradient-to-r from-purple-500 to-purple-600 text-white py-2 px-4 rounded-lg font-semibold hover:shadow-lg transition flex items-center justify-center gap-2 text-sm"
+                      >
+                        ⬇️ Descargar QR
+                      </button>
+                      <p className="text-xs text-gray-500 text-center">Guarda este QR para que el alumnado lo escanee</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          // MENÚ PROFESORADO
+          if (mode === 'profesorMenu') {
+            return (
+              <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
+                <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full">
+                  <h1 className="text-3xl font-bold text-center mb-6 text-gray-800">Configuración Profesorado</h1>
+
+                  <div className="bg-yellow-100 border-4 border-yellow-400 p-4 rounded-lg mb-6 text-center">
+                    <p className="text-sm text-gray-600">Código de sesión</p>
+                    <p className="text-4xl font-bold text-yellow-600">{gamePin}</p>
+                    <p className="text-xs text-gray-600 mt-2">Comparte este PIN con tu alumnado</p>
+                  </div>
+
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Número de equipos: {numTeams}</label>
+                      <input type="range" min="2" max="6" value={numTeams} onChange={(e) => setNumTeams(parseInt(e.target.value))} className="w-full h-2 bg-gray-300 rounded-lg" />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Dificultad:</label>
+                      <div className="space-y-2">
+                        {['facil', 'media', 'dificil'].map(level => (
+                          <button key={level} onClick={() => setDifficulty(level)} className={`w-full py-2 px-4 rounded-lg font-semibold transition ${difficulty === level ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}`}>
+                            {level === 'facil' ? 'Fácil' : level === 'media' ? 'Media' : 'Difícil'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Número de preguntas: {totalQuestions}</label>
+                      <input type="range" min="5" max="30" step="5" value={totalQuestions} onChange={(e) => setTotalQuestions(parseInt(e.target.value))} className="w-full h-2 bg-gray-300 rounded-lg" />
+                    </div>
+
+                    <button onClick={initGameProfesor} className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-3 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition">▶️ Comenzar Juego</button>
+                    <button onClick={salir} className="w-full bg-gray-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-gray-600 transition">Volver</button>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          // MENÚ ALUMNADO
+          if (mode === 'alumnoMenu') {
+            return (
+              <div className="min-h-screen bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center p-4">
+                <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full">
+                  <h1 className="text-3xl font-bold text-center mb-6 text-gray-800">Unirse a la partida</h1>
+
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Código PIN de la sesión:</label>
+                      <input type="text" value={inputPin} onChange={(e) => setInputPin(e.target.value.toUpperCase())} placeholder="Ej: ABC123" maxLength="6" className="w-full p-3 border-2 border-gray-300 rounded-lg text-center text-3xl font-bold tracking-widest" />
+                    </div>
+
+                    {joinError && (
+                      <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm font-semibold text-center">
+                        PIN incorrecto. Inténtalo de nuevo.
+                      </div>
+                    )}
+
+                    <button onClick={unirAlEquipo} className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-3 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition">▶️ Unirse</button>
+                    <button onClick={() => setMode('selectMode')} className="w-full bg-gray-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-gray-600 transition">Volver</button>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          // PROFESORADO - JUGANDO
+          if (mode === 'profesorPlaying') {
+            const timeColor = timeLeft > 10 ? 'text-green-600' : timeLeft > 5 ? 'text-yellow-600' : 'text-red-600';
+            const isLogicQuestion = currentQuestion?.type === 'logica';
+
+            return (
+              <div className="min-h-screen bg-gradient-to-br from-indigo-500 to-pink-500 flex items-center justify-center p-4">
+                <div className="bg-white rounded-lg shadow-2xl p-8 max-w-5xl w-full">
+                  <div className="flex justify-between items-center mb-6">
+                    <div className="text-center"><p className="text-sm font-semibold text-gray-600">Pregunta</p><p className="text-3xl font-bold text-purple-600">{questionNumber}/{totalQuestions}</p></div>
+                    <div className="text-center"><span className="text-3xl">{currentQuestion?.icon}</span><p className="text-sm font-semibold text-gray-600">{isLogicQuestion ? '🧩 Lógica' : '🧮 Cálculo'}</p></div>
+                    <div className={`text-center ${timeColor}`}><p className="text-4xl font-bold">{timeLeft}s</p></div>
+                  </div>
+
+                  <div className={`rounded-lg p-8 mb-8 text-center border-4 ${isLogicQuestion ? 'bg-gradient-to-r from-purple-100 to-pink-100 border-purple-400' : 'bg-gradient-to-r from-yellow-100 to-yellow-50 border-yellow-400'}`}>
+                    <p className={`font-bold mb-4 ${isLogicQuestion ? 'text-2xl text-purple-800' : 'text-6xl text-gray-800'}`}>{currentQuestion?.question}</p>
+                    {isLogicQuestion && <p className="text-sm text-purple-600 italic">💡 {currentQuestion?.hint}</p>}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mb-8">
+                    {currentQuestion?.options.map((option, idx) => (
+                      <button key={idx} disabled className={`text-white p-6 rounded-lg font-bold text-3xl opacity-75 ${isLogicQuestion ? 'bg-gradient-to-br from-purple-500 to-purple-600' : 'bg-gradient-to-br from-blue-500 to-blue-600'}`}>{option}</button>
+                    ))}
+                  </div>
+
+                  <div className="grid gap-3 mb-6" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(150px, 1fr))` }}>
+                    {teams.map(team => (
+                      <div key={team.id} className={`p-4 rounded-lg text-center font-bold transition ${teamAnswers[team.id] ? 'bg-blue-500 text-white scale-105 border-4 border-blue-700' : 'bg-gray-300 text-gray-800'}`}>
+                        <p className="text-sm mb-1">{team.name}</p>
+                        <p className="text-2xl">{teamAnswers[team.id] || '---'}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {showResults && (
+                    <div className="mt-8 p-4 bg-gray-100 rounded-lg border-4 border-gray-400">
+                      <p className="text-center font-bold text-xl mb-4">✓ Respuesta correcta: {currentQuestion?.answer}</p>
+                      
+                      <div className="grid gap-2 mb-6" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(120px, 1fr))` }}>
+                        {teams.map(team => {
+                          const isCorrect = teamAnswers[team.id] === currentQuestion?.answer;
+                          const points = difficulty === 'facil' ? 10 : difficulty === 'media' ? 20 : 30;
+                          return (
+                            <div key={team.id} className={`p-2 rounded text-center font-bold ${isCorrect ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
+                              <p className="text-sm">{team.name}</p>
+                              <p className="text-lg">{isCorrect ? `✓ +${points}` : '✗'}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="mb-6 p-4 bg-white rounded-lg border-2 border-gray-300">
+                        <p className="text-center font-bold text-gray-600 mb-3">PUNTUACIÓN ACTUAL</p>
+                        <div className="space-y-2">
+                          {[...teams].sort((a, b) => b.score - a.score).map((team, idx) => (
+                            <div key={team.id} className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-blue-50 to-purple-50 rounded">
+                              <span className="font-bold">{idx + 1}. {team.name}</span>
+                              <span className="text-lg font-bold text-blue-600">{team.score} pts</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <button onClick={nextQuestion} className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-3 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition">Siguiente Pregunta →</button>
+                    </div>
+                  )}
+
+                  <button onClick={salir} className="mt-4 w-full bg-red-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-red-600 transition">Salir</button>
+                </div>
+              </div>
+            );
+          }
+
+          // ALUMNADO - JUGANDO
+          if (mode === 'alumnoPlaying') {
+            const isLogicQuestion = currentQuestion?.type === 'logica';
+
+            return (
+              <div className="min-h-screen bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center p-4">
+                <div className="bg-white rounded-lg shadow-2xl p-8 max-w-2xl w-full">
+                  <div className="flex justify-between items-center mb-6">
+                    <div className="text-center flex-1"><p className="text-sm font-semibold text-gray-600">Pregunta</p><p className="text-3xl font-bold text-green-600">{questionNumber}/{totalQuestions}</p></div>
+                    <div className="text-center flex-1"><span className="text-3xl">{currentQuestion?.icon}</span><p className="text-sm font-semibold text-gray-600">{isLogicQuestion ? '🧩 Lógica' : '🧮 Cálculo'}</p></div>
+                    <div className="text-center flex-1"><p className="text-3xl font-bold text-red-600">{timeLeft}s</p></div>
+                  </div>
+
+                  <div className={`rounded-lg p-8 mb-8 text-center border-4 ${isLogicQuestion ? 'bg-gradient-to-r from-purple-100 to-pink-100 border-purple-400' : 'bg-gradient-to-r from-yellow-100 to-yellow-50 border-yellow-400'}`}>
+                    <p className={`font-bold mb-4 ${isLogicQuestion ? 'text-2xl text-purple-800' : 'text-5xl text-gray-800'}`}>{currentQuestion?.question}</p>
+                    {isLogicQuestion && <p className="text-sm text-purple-600 italic">💡 {currentQuestion?.hint}</p>}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    {currentQuestion?.options.map((option, idx) => (
+                      <button key={idx} onClick={() => handleAlumnoAnswer(option)} className={`text-white p-6 rounded-lg font-bold text-3xl transition transform hover:scale-105 ${alumnoRespuesta === option ? 'ring-4 ring-white scale-110 ' + (isLogicQuestion ? 'bg-gradient-to-br from-purple-600 to-purple-700' : 'bg-gradient-to-br from-blue-600 to-blue-700') : isLogicQuestion ? 'bg-gradient-to-br from-purple-500 to-purple-600' : 'bg-gradient-to-br from-blue-500 to-blue-600'}`}>{option}</button>
+                    ))}
+                  </div>
+
+                  {alumnoRespuesta !== null ? (
+                    <button onClick={enviarRespuesta} className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition">✓ Enviar Respuesta</button>
+                  ) : (
+                    <div className="w-full bg-gray-300 text-gray-700 py-4 px-4 rounded-lg font-bold text-lg text-center">Selecciona una respuesta</div>
+                  )}
+                </div>
+              </div>
+            );
+          }
+
+          // RESULTADOS
+          if (mode === 'resultados') {
+            const sortedTeams = [...teams].sort((a, b) => b.score - a.score);
+
+            return (
+              <div className="min-h-screen bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center p-4">
+                <div className="bg-white rounded-lg shadow-2xl p-8 max-w-2xl w-full">
+                  <div className="text-center mb-8">
+                    <h1 className="text-4xl font-bold text-gray-800">¡RESULTADOS FINALES!</h1>
+                  </div>
+
+                  <div className="space-y-4 mb-8">
+                    {sortedTeams.map((team, idx) => (
+                      <div key={team.id} className={`p-4 rounded-lg flex items-center justify-between font-bold text-lg ${idx === 0 ? 'bg-yellow-100 border-4 border-yellow-400' : idx === 1 ? 'bg-gray-100 border-4 border-gray-400' : 'bg-orange-100 border-4 border-orange-400'}`}>
+                        <span>{idx + 1}º - {team.name}</span>
+                        <span className="text-2xl">{team.score} PUNTOS</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button onClick={salir} className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-4 rounded-lg font-bold text-lg hover:shadow-lg transition">Volver al inicio</button>
+                </div>
+              </div>
+            );
+          }
+        }
+        
+        // Función de Renderizado con diagnóstico básico
+        function AppWrapper() {
+            // Este es un punto de inicio para la depuración
+            try {
+                return <MathGame />;
+            } catch (error) {
+                console.error("--- ERROR CRÍTICO EN LA APLICACIÓN ---");
+                console.error("El error se produjo durante el renderizado. Revisa los detalles:", error);
+                
+                // Mostrar un mensaje de error visible en la pantalla
+                return (
+                    <div className="min-h-screen bg-red-100 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full text-center">
+                            <h2 className="text-3xl font-bold text-red-600 mb-4">🚨 Error de Aplicación 🚨</h2>
+                            <p className="text-gray-700 mb-4">La aplicación no se pudo iniciar. Por favor, revisa la consola del navegador (F12) para ver los detalles del error e infórmame.</p>
+                            <button onClick={() => window.location.reload()} className="mt-4 bg-red-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-red-600 transition">Recargar Página</button>
+                        </div>
+                    </div>
+                );
+            }
+        }
+
+        // Renderizar la aplicación en el DOM
+        ReactDOM.createRoot(document.getElementById('root')).render(<AppWrapper />);
+    </script>
+</body>
+</html>
+
