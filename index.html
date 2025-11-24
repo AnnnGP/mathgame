@@ -87,14 +87,12 @@
 
           updatePlayerPresence() {
             if (!this.selectedTeam) return;
-            
             const now = Date.now();
             const players = this.getActivePlayers();
             players[this.playerId] = {
               teamId: this.selectedTeam.id,
               lastSeen: now
             };
-            
             try {
               localStorage.setItem('active-players', JSON.stringify(players));
             } catch (error) {
@@ -186,14 +184,11 @@
               { type: '÷', min: 2, max: 10, points: 15 }
             ];
             const op = ops[Math.floor(Math.random() * ops.length)];
-            
             const minAdjust = difficulty * 3;
             const maxAdjust = difficulty * 10;
             const minBase = op.min + minAdjust;
             const maxBase = op.max + maxAdjust;
-            
             let a, b, result;
-            
             if (op.type === '÷') {
               b = Math.floor(Math.random() * (op.max - op.min + 1)) + op.min;
               result = Math.floor(Math.random() * 10) + 1;
@@ -207,7 +202,6 @@
                 result = a - b;
               } else if (op.type === '×') result = a * b;
             }
-            
             const points = op.points;
             return { 
               type: 'math', 
@@ -259,10 +253,8 @@
               { next: 89, desc: '1, 1, 2, 3, 5, 8, 13, 21, 34, 55, ?' },
               { next: 100, desc: '10, 20, 30, 40, 50, 60, 70, 80, 90, ?' }
             ];
-            
             const p = patterns[Math.floor(Math.random() * patterns.length)];
             const points = 20;
-            
             return { 
               type: 'sequence', 
               question: `¿Qué número sigue? ${p.desc}`, 
@@ -300,10 +292,8 @@
               { q: '🏠🏢🏠🏢🏠🏢 ¿Qué sigue?', opts: ['🏠', '🏢', '🏬', '🏭'], ans: '🏠' },
               { q: '🌸🌺🌸🌺🌸🌺 ¿Qué sigue?', opts: ['🌸', '🌺', '🌻', '🌷'], ans: '🌸' }
             ];
-            
             const c = challenges[Math.floor(Math.random() * challenges.length)];
             const points = 25;
-            
             return { 
               type: 'visual', 
               question: c.q, 
@@ -326,14 +316,11 @@
             const rand = Math.random();
             let challenge;
             let attempts = 0;
-            
             do {
               if (rand < 0.4) challenge = this.generateMathChallenge();
               else if (rand < 0.7) challenge = this.generateSequenceChallenge();
               else challenge = this.generateVisualChallenge();
-              
               const challengeKey = `${challenge.type}:${challenge.question}:${challenge.answer}`;
-              
               if (!this.usedChallenges.has(challengeKey)) {
                 this.usedChallenges.add(challengeKey);
                 this.saveUsedChallenges();
@@ -341,7 +328,6 @@
               }
               attempts++;
             } while (attempts < 50);
-            
             if (attempts >= 50) {
               this.usedChallenges.clear();
               this.saveUsedChallenges();
@@ -349,7 +335,6 @@
               else if (rand < 0.7) challenge = this.generateSequenceChallenge();
               else challenge = this.generateVisualChallenge();
             }
-            
             this.currentChallenge = challenge;
             this.answer = '';
             this.feedback = '';
@@ -392,13 +377,11 @@
               this.render();
               return;
             }
-
             this.isActive = false;
             clearInterval(this.timerInterval);
             const isCorrect = this.currentChallenge.type === 'visual'
               ? this.answer === this.currentChallenge.answer
               : parseInt(this.answer) === this.currentChallenge.answer;
-
             if (isCorrect) {
               const bonus = this.timeLeft > TIME_LIMITS[this.currentChallenge.type] * 0.7 ? 5 : 0;
               const total = this.currentChallenge.points + bonus;
@@ -419,9 +402,7 @@
             if (!this.currentChallenge) return 'text-green-400';
             const pct = (this.timeLeft / TIME_LIMITS[this.currentChallenge.type]) * 100;
             return pct > 60 ? 'text-green-400' : pct > 30 ? 'text-yellow-400' : 'text-red-400';
-          }
-
-          render() {
+          }render() {
             const app = document.getElementById('app');
             
             if (this.view === 'select') {
@@ -450,8 +431,59 @@
             }
             
             if (this.view === 'team-select') {
-              const teamCards
-                = "text-4xl md:text-5xl font-bold text-gray-800 text-center mb-8">${this.currentChallenge.question}</p>
+              const teamCards = TEAMS.map(team => {
+                const playerCount = this.getTeamPlayerCount(team.id);
+                return `
+                  <button onclick="app.selectTeam(${team.id})" class="bg-white rounded-xl p-6 shadow-xl hover:scale-105 transition-transform border-4 ${team.color} bg-opacity-10" style="border-color: ${team.color.replace('bg-', '')}">
+                    <div class="flex items-center justify-between mb-4">
+                      <h3 class="text-2xl font-bold text-gray-800">${team.name}</h3>
+                      <div class="flex items-center gap-2 text-gray-600">
+                        ${icons.user}
+                        <span class="font-bold">${playerCount}</span>
+                      </div>
+                    </div>
+                    <div class="text-4xl font-bold ${team.textColor} mb-2">${this.scores[team.id] || 0}</div>
+                    <p class="text-gray-600">puntos</p>
+                  </button>
+                `;
+              }).join('');
+              
+              app.innerHTML = `
+                <div class="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-600 p-4">
+                  <div class="max-w-4xl mx-auto pt-8">
+                    <div class="flex justify-between items-center mb-8">
+                      <button onclick="app.view='select';app.render()" class="bg-white text-gray-800 px-6 py-3 rounded-lg font-bold hover:bg-gray-100 transition">
+                        ← Volver
+                      </button>
+                      <h1 class="text-3xl md:text-4xl font-bold text-white">Selecciona tu Equipo</h1>
+                      <div class="w-24"></div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      ${teamCards}
+                    </div>
+                  </div>
+                </div>
+              `;
+            }
+            
+            if (this.view === 'game') {
+              let challengeContent = '';
+              
+              if (this.currentChallenge) {
+                if (this.currentChallenge.type === 'visual') {
+                  const optionButtons = this.currentChallenge.options.map(opt => 
+                    `<button onclick="app.answer='${opt}';app.checkAnswer()" 
+                            class="text-6xl p-8 bg-white rounded-2xl shadow-xl hover:scale-110 transition-transform ${this.answer === opt ? 'ring-4 ring-yellow-400' : ''}">${opt}</button>`
+                  ).join('');
+                  
+                  challengeContent = `
+                    <div class="mb-8">
+                      <div class="flex items-center justify-center gap-3 mb-6">
+                        ${icons.brain}
+                        <span class="text-white font-bold text-xl">Patrón Visual</span>
+                      </div>
+                      <div class="bg-white rounded-2xl p-8 mb-6">
+                        <p class="text-4xl md:text-5xl font-bold text-gray-800 text-center mb-8">${this.currentChallenge.question}</p>
                       </div>
                       <div class="grid grid-cols-2 gap-4">
                         ${optionButtons}
@@ -526,9 +558,7 @@
                   if (input) input.focus();
                 }, 100);
               }
-            }
-            
-            if (this.view === 'display') {
+            }if (this.view === 'display') {
               const sortedTeams = [...TEAMS].sort((a, b) => 
                 (this.scores[b.id] || 0) - (this.scores[a.id] || 0)
               );
