@@ -17,12 +17,12 @@
 
     <script>
         const TEAMS = [
-          { id: 1, name: 'Equipo Rojo', color: 'bg-red-500', dark: 'bg-red-600' },
-          { id: 2, name: 'Equipo Azul', color: 'bg-blue-500', dark: 'bg-blue-600' },
-          { id: 3, name: 'Equipo Verde', color: 'bg-green-500', dark: 'bg-green-600' },
-          { id: 4, name: 'Equipo Amarillo', color: 'bg-yellow-500', dark: 'bg-yellow-600' },
-          { id: 5, name: 'Equipo Naranja', color: 'bg-orange-500', dark: 'bg-orange-600' },
-          { id: 6, name: 'Equipo Morado', color: 'bg-purple-500', dark: 'bg-purple-600' }
+          { id: 1, name: 'Equipo Rojo', color: 'bg-red-500', dark: 'bg-red-600', textColor: 'text-red-600' },
+          { id: 2, name: 'Equipo Azul', color: 'bg-blue-500', dark: 'bg-blue-600', textColor: 'text-blue-600' },
+          { id: 3, name: 'Equipo Verde', color: 'bg-green-500', dark: 'bg-green-600', textColor: 'text-green-600' },
+          { id: 4, name: 'Equipo Amarillo', color: 'bg-yellow-500', dark: 'bg-yellow-600', textColor: 'text-yellow-600' },
+          { id: 5, name: 'Equipo Naranja', color: 'bg-orange-500', dark: 'bg-orange-600', textColor: 'text-orange-600' },
+          { id: 6, name: 'Equipo Morado', color: 'bg-purple-500', dark: 'bg-purple-600', textColor: 'text-purple-600' }
         ];
 
         const TIME_LIMITS = { math: 17, sequence: 17, visual: 17 };
@@ -220,7 +220,6 @@
 
           generateSequenceChallenge() {
             const patterns = [
-              // Secuencias aritméticas básicas
               { next: 10, desc: '2, 4, 6, 8, ?' },
               { next: 9, desc: '1, 3, 5, 7, ?' },
               { next: 25, desc: '5, 10, 15, 20, ?' },
@@ -233,32 +232,22 @@
               { next: 30, desc: '5, 10, 15, 20, 25, ?' },
               { next: 35, desc: '7, 14, 21, 28, ?' },
               { next: 40, desc: '8, 16, 24, 32, ?' },
-              
-              // Secuencias geométricas
               { next: 32, desc: '2, 4, 8, 16, ?' },
               { next: 81, desc: '1, 3, 9, 27, ?' },
               { next: 64, desc: '4, 8, 16, 32, ?' },
               { next: 625, desc: '5, 25, 125, ?' },
               { next: 128, desc: '2, 8, 32, ?' },
-              
-              // Cuadrados perfectos
               { next: 25, desc: '1, 4, 9, 16, ?' },
               { next: 36, desc: '4, 9, 16, 25, ?' },
               { next: 121, desc: '1, 4, 9, 16, 25, 36, 49, 64, 81, 100, ?' },
               { next: 49, desc: '1, 4, 9, 16, 25, 36, ?' },
-              
-              // Fibonacci
               { next: 13, desc: '1, 1, 2, 3, 5, 8, ?' },
               { next: 55, desc: '1, 1, 2, 3, 5, 8, 13, 21, 34, ?' },
               { next: 21, desc: '1, 1, 2, 3, 5, 8, 13, ?' },
-              
-              // Secuencias descendentes
               { next: 60, desc: '100, 90, 80, 70, ?' },
               { next: 5, desc: '25, 20, 15, 10, ?' },
               { next: 40, desc: '100, 80, 60, ?' },
               { next: 0, desc: '20, 16, 12, 8, 4, ?' },
-              
-              // Secuencias con patrones
               { next: 42, desc: '2, 6, 12, 20, 30, ?' },
               { next: 7, desc: '1, 2, 3, 4, 5, 6, ?' },
               { next: 20, desc: '2, 5, 8, 11, 14, 17, ?' },
@@ -266,8 +255,6 @@
               { next: 26, desc: '2, 5, 10, 17, ?' },
               { next: 36, desc: '1, 4, 9, 16, 25, ?' },
               { next: 19, desc: '3, 5, 7, 11, 13, 17, ?' },
-              
-              // Más complejas
               { next: 144, desc: '1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, ?' },
               { next: 89, desc: '1, 1, 2, 3, 5, 8, 13, 21, 34, 55, ?' },
               { next: 100, desc: '10, 20, 30, 40, 50, 60, 70, 80, 90, ?' }
@@ -452,7 +439,7 @@
                         <p class="text-gray-600">Móviles - Selecciona equipo</p>
                       </button>
                       <button onclick="app.view='display';app.render()" class="bg-white rounded-2xl p-8 shadow-2xl hover:scale-105 transition-transform">
-                      ${icons.monitor}
+                        ${icons.monitor}
                         <h2 class="text-3xl font-bold text-gray-800 mb-2 mt-4">Pantalla</h2>
                         <p class="text-gray-600">Proyector - Ver puntuaciones</p>
                       </button>
@@ -463,60 +450,8 @@
             }
             
             if (this.view === 'team-select') {
-              const teamCards = TEAMS.map(team => {
-                const playerCount = this.getTeamPlayerCount(team.id);
-                return `
-                  <button onclick="app.selectTeam(${team.id})" class="bg-white rounded-xl p-6 shadow-xl hover:scale-105 transition-transform ${team.color} bg-opacity-10 border-4 border-${team.color.replace('bg-', '')}">
-                    <div class="flex items-center justify-between mb-4">
-                      <h3 class="text-2xl font-bold text-gray-800">${team.name}</h3>
-                      <div class="flex items-center gap-2 text-gray-600">
-                        ${icons.user}
-                        <span class="font-bold">${playerCount}</span>
-                      </div>
-                    </div>
-                    <div class="text-4xl font-bold ${team.color.replace('bg-', 'text-')} mb-2">${this.scores[team.id] || 0}</div>
-                    <p class="text-gray-600">puntos</p>
-                  </button>
-                `;
-              }).join('');
-              
-              app.innerHTML = `
-                <div class="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-600 p-4">
-                  <div class="max-w-4xl mx-auto pt-8">
-                    <div class="flex justify-between items-center mb-8">
-                      <button onclick="app.view='select';app.render()" class="bg-white text-gray-800 px-6 py-3 rounded-lg font-bold hover:bg-gray-100 transition">
-                        ← Volver
-                      </button>
-                      <h1 class="text-3xl md:text-4xl font-bold text-white">Selecciona tu Equipo</h1>
-                      <div class="w-24"></div>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      ${teamCards}
-                    </div>
-                  </div>
-                </div>
-              `;
-            }
-            
-            if (this.view === 'game') {
-              const teamColor = this.selectedTeam.color.replace('bg-', 'text-');
-              let challengeContent = '';
-              
-              if (this.currentChallenge) {
-                if (this.currentChallenge.type === 'visual') {
-                  const optionButtons = this.currentChallenge.options.map(opt => 
-                    `<button onclick="app.answer='${opt}';app.checkAnswer()" 
-                            class="text-6xl p-8 bg-white rounded-2xl shadow-xl hover:scale-110 transition-transform ${this.answer === opt ? 'ring-4 ring-yellow-400' : ''}">${opt}</button>`
-                  ).join('');
-                  
-                  challengeContent = `
-                    <div class="mb-8">
-                      <div class="flex items-center justify-center gap-3 mb-6">
-                        ${icons.brain}
-                        <span class="text-white font-bold text-xl">Patrón Visual</span>
-                      </div>
-                      <div class="bg-white rounded-2xl p-8 mb-6">
-                        <p class="text-4xl md:text-5xl font-bold text-gray-800 text-center mb-8">${this.currentChallenge.question}</p>
+              const teamCards
+                = "text-4xl md:text-5xl font-bold text-gray-800 text-center mb-8">${this.currentChallenge.question}</p>
                       </div>
                       <div class="grid grid-cols-2 gap-4">
                         ${optionButtons}
@@ -620,7 +555,7 @@
                         </div>
                       </div>
                       <div class="text-right">
-                        <div class="text-5xl font-bold ${teamColor}">${score}</div>
+                        <div class="text-5xl font-bold ${team.textColor}">${score}</div>
                         <div class="text-gray-600 font-semibold">puntos</div>
                       </div>
                     </div>
