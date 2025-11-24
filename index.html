@@ -34,7 +34,8 @@
           calculator: `<svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>`,
           target: `<svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
           brain: `<svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>`,
-          monitor: `<svg class="icon mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>`
+          monitor: `<svg class="icon mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>`,
+          user: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>`
         };
 
         class App {
@@ -51,6 +52,7 @@
             this.syncInterval = null;
             this.difficulty = 1;
             this.usedChallenges = new Set();
+            this.playerId = 'player_' + Date.now() + '_' + Math.random();
             this.init();
           }
 
@@ -58,6 +60,7 @@
             this.scores = this.loadScores();
             this.render();
             this.startSync();
+            this.startHeartbeat();
           }
 
           loadScores() {
@@ -74,9 +77,61 @@
             return initial;
           }
 
+          startHeartbeat() {
+            // Actualizar presencia cada 3 segundos
+            setInterval(() => {
+              if (this.selectedTeam) {
+                this.updatePlayerPresence();
+              }
+            }, 3000);
+          }
+
+          updatePlayerPresence() {
+            if (!this.selectedTeam) return;
+            
+            const now = Date.now();
+            const players = this.getActivePlayers();
+            players[this.playerId] = {
+              teamId: this.selectedTeam.id,
+              lastSeen: now
+            };
+            
+            try {
+              localStorage.setItem('active-players', JSON.stringify(players));
+            } catch (error) {
+              console.error('Error updating presence:', error);
+            }
+          }
+
+          getActivePlayers() {
+            try {
+              const stored = localStorage.getItem('active-players');
+              if (stored) {
+                const players = JSON.parse(stored);
+                const now = Date.now();
+                // Limpiar jugadores inactivos (más de 10 segundos)
+                const active = {};
+                for (const [id, data] of Object.entries(players)) {
+                  if (now - data.lastSeen < 10000) {
+                    active[id] = data;
+                  }
+                }
+                return active;
+              }
+            } catch (error) {
+              console.log('No active players found');
+            }
+            return {};
+          }
+
+          getTeamPlayerCount(teamId) {
+            const players = this.getActivePlayers();
+            return Object.values(players).filter(p => p.teamId === teamId).length;
+          }
+
           startSync() {
             this.syncInterval = setInterval(() => {
-              if (this.view === 'display') {
+              if (this.view === 'display' || this.view === 'team-select') {
                 this.scores = this.loadScores();
                 this.render();
               }
@@ -96,10 +151,32 @@
             TEAMS.forEach(t => this.scores[t.id] = 0);
             try {
               localStorage.setItem('team-scores', JSON.stringify(this.scores));
+              localStorage.removeItem('used-challenges');
             } catch (error) {
               console.error('Error resetting scores:', error);
             }
+            this.usedChallenges.clear();
             this.render();
+          }
+
+          loadUsedChallenges() {
+            try {
+              const stored = localStorage.getItem('used-challenges');
+              if (stored) {
+                return new Set(JSON.parse(stored));
+              }
+            } catch (error) {
+              console.log('No used challenges found');
+            }
+            return new Set();
+          }
+
+          saveUsedChallenges() {
+            try {
+              localStorage.setItem('used-challenges', JSON.stringify([...this.usedChallenges]));
+            } catch (error) {
+              console.error('Error saving used challenges:', error);
+            }
           }
 
           generateMathChallenge() {
@@ -145,26 +222,57 @@
 
           generateSequenceChallenge() {
             const patterns = [
+              // Secuencias aritméticas básicas
               { next: 10, desc: '2, 4, 6, 8, ?' },
               { next: 9, desc: '1, 3, 5, 7, ?' },
               { next: 25, desc: '5, 10, 15, 20, ?' },
               { next: 50, desc: '10, 20, 30, 40, ?' },
               { next: 15, desc: '3, 6, 9, 12, ?' },
-              { next: 32, desc: '2, 4, 8, 16, ?' },
-              { next: 60, desc: '100, 90, 80, 70, ?' },
-              { next: 121, desc: '1, 4, 9, 16, 25, 36, 49, 64, 81, 100, ?' },
-              { next: 55, desc: '1, 2, 3, 5, 8, 13, 21, 34, ?' },
-              { next: 27, desc: '1, 3, 9, 27, ?' },
-              { next: 42, desc: '2, 6, 12, 20, 30, ?' },
-              { next: 13, desc: '1, 1, 2, 3, 5, 8, ?' },
-              { next: 7, desc: '1, 2, 3, 4, 5, 6, ?' },
+              { next: 18, desc: '6, 9, 12, 15, ?' },
+              { next: 11, desc: '1, 3, 5, 7, 9, ?' },
               { next: 12, desc: '2, 4, 6, 8, 10, ?' },
               { next: 20, desc: '4, 8, 12, 16, ?' },
               { next: 30, desc: '5, 10, 15, 20, 25, ?' },
-              { next: 11, desc: '1, 3, 5, 7, 9, ?' },
+              { next: 35, desc: '7, 14, 21, 28, ?' },
+              { next: 40, desc: '8, 16, 24, 32, ?' },
+              
+              // Secuencias geométricas
+              { next: 32, desc: '2, 4, 8, 16, ?' },
+              { next: 81, desc: '1, 3, 9, 27, ?' },
+              { next: 64, desc: '4, 8, 16, 32, ?' },
+              { next: 625, desc: '5, 25, 125, ?' },
+              { next: 128, desc: '2, 8, 32, ?' },
+              
+              // Cuadrados perfectos
               { next: 25, desc: '1, 4, 9, 16, ?' },
+              { next: 36, desc: '4, 9, 16, 25, ?' },
+              { next: 121, desc: '1, 4, 9, 16, 25, 36, 49, 64, 81, 100, ?' },
+              { next: 49, desc: '1, 4, 9, 16, 25, 36, ?' },
+              
+              // Fibonacci
+              { next: 13, desc: '1, 1, 2, 3, 5, 8, ?' },
+              { next: 55, desc: '1, 2, 3, 5, 8, 13, 21, 34, ?' },
+              { next: 21, desc: '1, 1, 2, 3, 5, 8, 13, ?' },
+              
+              // Secuencias descendentes
+              { next: 60, desc: '100, 90, 80, 70, ?' },
+              { next: 5, desc: '25, 20, 15, 10, ?' },
+              { next: 40, desc: '100, 80, 60, ?' },
+              { next: 0, desc: '20, 16, 12, 8, 4, ?' },
+              
+              // Secuencias con patrones
+              { next: 42, desc: '2, 6, 12, 20, 30, ?' },
+              { next: 7, desc: '1, 2, 3, 4, 5, 6, ?' },
               { next: 20, desc: '2, 5, 8, 11, 14, 17, ?' },
-              { next: 14, desc: '2, 3, 5, 8, 11, ?' }
+              { next: 17, desc: '2, 3, 5, 8, 12, ?' },
+              { next: 26, desc: '2, 5, 10, 17, ?' },
+              { next: 31, desc: '1, 4, 9, 16, 25, ?' },
+              { next: 19, desc: '3, 5, 7, 11, 13, 17, ?' },
+              
+              // Más complejas
+              { next: 144, desc: '1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, ?' },
+              { next: 89, desc: '1, 1, 2, 3, 5, 8, 13, 21, 34, 55, ?' },
+              { next: 100, desc: '10, 20, 30, 40, 50, 60, 70, 80, 90, ?' }
             ];
             
             const p = patterns[Math.floor(Math.random() * patterns.length)];
@@ -190,7 +298,22 @@
               { q: '🍎🍎🍌🍎🍎🍌 ¿Qué sigue?', opts: ['🍎', '🍌', '🍊', '🍇'], ans: '🍎' },
               { q: '⚪⚫⚪⚫⚪⚫ ¿Qué sigue?', opts: ['⚪', '⚫', '🔴', '🟡'], ans: '⚪' },
               { q: '🟩🟨🟦🟩🟨🟦 ¿Qué sigue?', opts: ['🟩', '🟨', '🟦', '🟪'], ans: '🟩' },
-              { q: '⭐🌟✨⭐🌟✨ ¿Qué sigue?', opts: ['⭐', '🌟', '✨', '💫'], ans: '⭐' }
+              { q: '⭐🌟✨⭐🌟✨ ¿Qué sigue?', opts: ['⭐', '🌟', '✨', '💫'], ans: '⭐' },
+              { q: '🔴🔴🔴🔵🔴🔴🔴🔵 ¿Qué sigue?', opts: ['🔵', '🔴', '🟢', '🟡'], ans: '🔴' },
+              { q: '🌻🌻🌺🌻🌻🌺 ¿Qué sigue?', opts: ['🌻', '🌺', '🌷', '🌸'], ans: '🌻' },
+              { q: '🟡🟡🟡🔵🟡🟡🟡🔵 ¿Qué sigue?', opts: ['🔵', '🟡', '🟢', '🔴'], ans: '🟡' },
+              { q: '👀👁️👁️👀👁️👁️ ¿Qué sigue?', opts: ['👀', '👁️', '👂', '👃'], ans: '👀' },
+              { q: '💎💎💎🔶💎💎💎🔶 ¿Qué sigue?', opts: ['🔶', '💎', '💍', '✨'], ans: '💎' },
+              { q: '🌈☀️🌈☀️🌈☀️ ¿Qué sigue?', opts: ['🌈', '☀️', '⛅', '🌙'], ans: '🌈' },
+              { q: '🎵🎶🎵🎶🎵🎶 ¿Qué sigue?', opts: ['🎵', '🎶', '🎼', '🎤'], ans: '🎵' },
+              { q: '🍕🍕🍔🍕🍕🍔 ¿Qué sigue?', opts: ['🍕', '🍔', '🌭', '🍟'], ans: '🍕' },
+              { q: '🐶🐱🐶🐱🐶🐱 ¿Qué sigue?', opts: ['🐶', '🐱', '🐭', '🐹'], ans: '🐶' },
+              { q: '⚽🏀⚽🏀⚽🏀 ¿Qué sigue?', opts: ['⚽', '🏀', '🏈', '⚾'], ans: '⚽' },
+              { q: '🌙⭐⭐🌙⭐⭐ ¿Qué sigue?', opts: ['🌙', '⭐', '☀️', '🌟'], ans: '🌙' },
+              { q: '🔥💧🔥💧🔥💧 ¿Qué sigue?', opts: ['🔥', '💧', '🌪️', '⚡'], ans: '🔥' },
+              { q: '🎈🎈🎉🎈🎈🎉 ¿Qué sigue?', opts: ['🎈', '🎉', '🎁', '🎊'], ans: '🎈' },
+              { q: '🏠🏢🏠🏢🏠🏢 ¿Qué sigue?', opts: ['🏠', '🏢', '🏬', '🏭'], ans: '🏠' },
+              { q: '🌸🌺🌸🌺🌸🌺 ¿Qué sigue?', opts: ['🌸', '🌺', '🌻', '🌷'], ans: '🌸' }
             ];
             
             const c = challenges[Math.floor(Math.random() * challenges.length)];
@@ -209,16 +332,39 @@
           selectTeam(teamId) {
             this.selectedTeam = TEAMS.find(t => t.id === teamId);
             this.view = 'game';
+            this.usedChallenges = this.loadUsedChallenges();
+            this.updatePlayerPresence();
             this.startNewChallenge();
           }
 
           startNewChallenge() {
             const rand = Math.random();
             let challenge;
+            let attempts = 0;
             
-            if (rand < 0.4) challenge = this.generateMathChallenge();
-            else if (rand < 0.7) challenge = this.generateSequenceChallenge();
-            else challenge = this.generateVisualChallenge();
+            do {
+              if (rand < 0.4) challenge = this.generateMathChallenge();
+              else if (rand < 0.7) challenge = this.generateSequenceChallenge();
+              else challenge = this.generateVisualChallenge();
+              
+              const challengeKey = `${challenge.type}:${challenge.question}:${challenge.answer}`;
+              
+              if (!this.usedChallenges.has(challengeKey)) {
+                this.usedChallenges.add(challengeKey);
+                this.saveUsedChallenges();
+                break;
+              }
+              attempts++;
+            } while (attempts < 50);
+            
+            // Si se usaron todos los retos, limpiar y empezar de nuevo
+            if (attempts >= 50) {
+              this.usedChallenges.clear();
+              this.saveUsedChallenges();
+              if (rand < 0.4) challenge = this.generateMathChallenge();
+              else if (rand < 0.7) challenge = this.generateSequenceChallenge();
+              else challenge = this.generateVisualChallenge();
+            }
             
             this.currentChallenge = challenge;
             this.answer = '';
@@ -309,160 +455,3 @@
                         <p class="text-gray-600">Móviles - Selecciona equipo</p>
                       </button>
                       <button onclick="app.view='display';app.render()" class="bg-white rounded-2xl p-8 shadow-2xl hover:scale-105 transition-transform">
-                        ${icons.monitor}
-                        <h2 class="text-3xl font-bold text-gray-800 mb-2 mt-4">Pantalla PDI</h2>
-                        <p class="text-gray-600">Ver clasificación en grande</p>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              `;
-            }
-            
-            else if (this.view === 'team-select') {
-              app.innerHTML = `
-                <div class="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-600 p-4">
-                  <div class="max-w-4xl mx-auto pt-8">
-                    <button onclick="app.view='select';app.render()" class="mb-6 text-white text-lg hover:underline">← Volver</button>
-                    <div class="text-center mb-8">
-                      <h1 class="text-4xl font-bold text-white mb-4">Selecciona tu Equipo</h1>
-                    </div>
-                    <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      ${TEAMS.map(team => `
-                        <button onclick="app.selectTeam(${team.id})" class="${team.color} rounded-2xl p-6 shadow-2xl hover:scale-105 transition-transform">
-                          <div class="text-white text-center">
-                            ${icons.users}
-                            <h2 class="text-2xl font-bold my-2">${team.name}</h2>
-                            <p class="text-xl font-semibold">${this.scores[team.id] || 0} puntos</p>
-                          </div>
-                        </button>
-                      `).join('')}
-                    </div>
-                  </div>
-                </div>
-              `;
-            }
-            
-            else if (this.view === 'game' && this.currentChallenge) {
-              const team = this.selectedTeam;
-              const ch = this.currentChallenge;
-              app.innerHTML = `
-                <div class="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-600 p-4">
-                  <div class="max-w-2xl mx-auto pt-4">
-                    <button onclick="app.view='team-select';app.isActive=false;clearInterval(app.timerInterval);app.render()" class="mb-4 text-white text-lg hover:underline">← Cambiar equipo</button>
-                    <div class="${team.color} rounded-2xl p-6 shadow-2xl mb-6">
-                      <div class="flex items-center justify-between text-white">
-                        <div>
-                          <h2 class="text-2xl font-bold">${team.name}</h2>
-                          <p class="text-xl">Puntuación: ${this.scores[team.id] || 0}</p>
-                        </div>
-                        <div class="text-right">
-                          <div class="text-2xl font-bold">Nivel: ${this.difficulty}</div>
-                          <div class="text-sm opacity-90">Dificultad</div>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="bg-white rounded-2xl p-8 shadow-2xl">
-                      <div class="flex items-center justify-between mb-6">
-                        <div class="flex items-center gap-2">
-                          ${ch.type === 'math' ? icons.calculator : ch.type === 'sequence' ? icons.target : icons.brain}
-                          <span class="text-sm font-semibold text-gray-600 uppercase">
-                            ${ch.type === 'math' ? 'Matemáticas' : ch.type === 'sequence' ? 'Secuencias' : 'Lógica Visual'}
-                          </span>
-                        </div>
-                        <div id="timer-container" class="flex items-center gap-2 ${this.getTimeColor()} font-bold text-2xl">
-                          ${icons.clock}
-                          <span id="timer-display">${this.timeLeft}s</span>
-                        </div>
-                      </div>
-                      <div class="mb-6">
-                        <h3 class="text-3xl font-bold text-gray-800 text-center mb-4">${ch.question}</h3>
-                        <div class="text-center text-lg text-gray-600">Vale ${ch.points} puntos</div>
-                      </div>
-                      ${ch.type === 'visual' ? `
-                        <div class="grid grid-cols-2 gap-4 mb-6">
-                          ${ch.options.map(opt => `
-                            <button onclick="app.answer='${opt}';app.checkAnswer()" 
-                              class="p-8 text-6xl rounded-xl border-4 ${this.answer === opt ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-300'}">
-                              ${opt}
-                            </button>
-                          `).join('')}
-                        </div>
-                      ` : `
-                        <div class="mb-6">
-                          <input type="tel" id="answerInput" 
-                            class="w-full p-4 text-3xl text-center border-4 border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
-                            placeholder="Tu respuesta" 
-                            value="${this.answer}"
-                            onkeydown="if(event.key==='Enter'){event.preventDefault();app.checkAnswer()}"
-                            oninput="const cleaned=this.value.replace(/[^0-9-]/g,'');app.answer=cleaned;this.value=cleaned;">
-                        </div>
-                        <button onclick="app.checkAnswer()" 
-                          class="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-4 rounded-xl text-2xl font-bold hover:from-blue-600 hover:to-purple-600 transition-all shadow-lg">
-                          Comprobar Respuesta
-                        </button>
-                      `}
-                      ${this.feedback ? `
-                        <div class="mt-6 p-4 rounded-xl text-center text-xl font-bold ${
-                          this.feedback.includes('CORRECTO') ? 'bg-green-100 text-green-800' :
-                          this.feedback.includes('Tiempo') ? 'bg-orange-100 text-orange-800' : 'bg-red-100 text-red-800'
-                        }">
-                          ${this.feedback}
-                        </div>
-                      ` : ''}
-                    </div>
-                  </div>
-                </div>
-              `;
-              if (ch.type !== 'visual') {
-                setTimeout(() => document.getElementById('answerInput')?.focus(), 100);
-              }
-            }
-            
-            else if (this.view === 'display') {
-              const sorted = [...TEAMS].sort((a, b) => (this.scores[b.id] || 0) - (this.scores[a.id] || 0));
-              app.innerHTML = `
-                <div class="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-8">
-                  <div class="max-w-6xl mx-auto">
-                    <div class="text-center mb-8">
-                      <h1 class="text-6xl font-bold text-white mb-4">🏆 Clasificación 🏆</h1>
-                      <button onclick="if(confirm('¿Reiniciar puntuaciones?')){app.resetScores()}" 
-                        class="mt-4 bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-bold">
-                        Reiniciar Puntuaciones
-                      </button>
-                    </div>
-                    <div class="space-y-4">
-                      ${sorted.map((team, idx) => `
-                        <div class="${team.color} rounded-2xl p-6 shadow-2xl transform transition-all hover:scale-102">
-                          <div class="flex items-center justify-between text-white">
-                            <div class="flex items-center gap-4">
-                              <div class="text-4xl font-bold w-16">#${idx + 1}</div>
-                              <div>
-                                <h2 class="text-3xl font-bold">${team.name}</h2>
-                              </div>
-                            </div>
-                            <div class="text-5xl font-bold">${this.scores[team.id] || 0}</div>
-                          </div>
-                        </div>
-                      `).join('')}
-                    </div>
-                    <div class="text-center mt-8">
-                      <button onclick="app.view='select';app.render()" class="text-white text-xl hover:underline">
-                        ← Volver al menú
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              `;
-            }
-          }
-        }
-
-        let app;
-        window.addEventListener('DOMContentLoaded', () => {
-          app = new App();
-          window.app = app;
-        });
-    </script>
-</body>
-</html>
