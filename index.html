@@ -55,16 +55,16 @@
           }
 
           async init() {
-            this.scores = await this.loadScores();
+            this.scores = this.loadScores();
             this.render();
             this.startSync();
           }
 
-          async loadScores() {
+          loadScores() {
             try {
-              const result = await window.storage.get('team-scores', true);
-              if (result && result.value) {
-                return JSON.parse(result.value);
+              const stored = localStorage.getItem('team-scores');
+              if (stored) {
+                return JSON.parse(stored);
               }
             } catch (error) {
               console.log('No scores found, initializing...');
@@ -75,27 +75,27 @@
           }
 
           startSync() {
-            this.syncInterval = setInterval(async () => {
+            this.syncInterval = setInterval(() => {
               if (this.view === 'display') {
-                this.scores = await this.loadScores();
+                this.scores = this.loadScores();
                 this.render();
               }
             }, 1000);
           }
 
-          async updateScore(teamId, points) {
+          updateScore(teamId, points) {
             this.scores[teamId] = (this.scores[teamId] || 0) + points;
             try {
-              await window.storage.set('team-scores', JSON.stringify(this.scores), true);
+              localStorage.setItem('team-scores', JSON.stringify(this.scores));
             } catch (error) {
               console.error('Error saving scores:', error);
             }
           }
 
-          async resetScores() {
+          resetScores() {
             TEAMS.forEach(t => this.scores[t.id] = 0);
             try {
-              await window.storage.set('team-scores', JSON.stringify(this.scores), true);
+              localStorage.setItem('team-scores', JSON.stringify(this.scores));
             } catch (error) {
               console.error('Error resetting scores:', error);
             }
@@ -190,12 +190,7 @@
               { q: '🍎🍎🍌🍎🍎🍌 ¿Qué sigue?', opts: ['🍎', '🍌', '🍊', '🍇'], ans: '🍎' },
               { q: '⚪⚫⚪⚫⚪⚫ ¿Qué sigue?', opts: ['⚪', '⚫', '🔴', '🟡'], ans: '⚪' },
               { q: '🟩🟨🟦🟩🟨🟦 ¿Qué sigue?', opts: ['🟩', '🟨', '🟦', '🟪'], ans: '🟩' },
-              { q: '⭐🌟✨⭐🌟✨ ¿Qué sigue?', opts: ['⭐', '🌟', '✨', '💫'], ans: '⭐' },
-              { q: '🔴🔴🔴🔵🔴🔴🔴🔵 ¿Qué sigue?', opts: ['🔵', '🔴', '🟢', '🟡'], ans: '🔴' },
-              { q: '🌻🌻🌺🌻🌻🌺 ¿Qué sigue?', opts: ['🌻', '🌺', '🌷', '🌸'], ans: '🌻' },
-              { q: '🟡🟡🟡🔵🟡🟡🟡🔵 ¿Qué sigue?', opts: ['🔵', '🟡', '🟢', '🔴'], ans: '🟡' },
-              { q: '👀👁️👁️👀👁️👁️ ¿Qué sigue?', opts: ['👀', '👁️', '👂', '👃'], ans: '👀' },
-              { q: '💎💎💎🔶💎💎💎🔶 ¿Qué sigue?', opts: ['🔶', '💎', '💍', '✨'], ans: '💎' }
+              { q: '⭐🌟✨⭐🌟✨ ¿Qué sigue?', opts: ['⭐', '🌟', '✨', '💫'], ans: '⭐' }
             ];
             
             const c = challenges[Math.floor(Math.random() * challenges.length)];
@@ -211,27 +206,19 @@
             };
           }
 
+          selectTeam(teamId) {
+            this.selectedTeam = TEAMS.find(t => t.id === teamId);
+            this.view = 'game';
+            this.startNewChallenge();
+          }
+
           startNewChallenge() {
             const rand = Math.random();
             let challenge;
-            let attempts = 0;
             
-            do {
-              if (rand < 0.4) challenge = this.generateMathChallenge();
-              else if (rand < 0.7) challenge = this.generateSequenceChallenge();
-              else challenge = this.generateVisualChallenge();
-              
-              const challengeKey = JSON.stringify(challenge);
-              if (!this.usedChallenges.has(challengeKey)) {
-                this.usedChallenges.add(challengeKey);
-                break;
-              }
-              attempts++;
-            } while (attempts < 10);
-            
-            if (this.usedChallenges.size > 30) {
-              this.usedChallenges.clear();
-            }
+            if (rand < 0.4) challenge = this.generateMathChallenge();
+            else if (rand < 0.7) challenge = this.generateSequenceChallenge();
+            else challenge = this.generateVisualChallenge();
             
             this.currentChallenge = challenge;
             this.answer = '';
@@ -292,15 +279,9 @@
               setTimeout(() => this.startNewChallenge(), 2000);
             } else {
               this.difficulty = Math.max(1, this.difficulty - 1);
-              this.feedback = `❌ Incorrecto. ¡Inténtalo de nuevo!`;
+              this.feedback = `❌ Incorrecto. La respuesta era: ${this.currentChallenge.answer}`;
               this.render();
-              setTimeout(() => {
-                this.feedback = '';
-                this.timeLeft = TIME_LIMITS[this.currentChallenge.type];
-                this.isActive = true;
-                this.startTimer();
-                this.render();
-              }, 2000);
+              setTimeout(() => this.startNewChallenge(), 3000);
             }
           }
 
@@ -441,10 +422,47 @@
             else if (this.view === 'display') {
               const sorted = [...TEAMS].sort((a, b) => (this.scores[b.id] || 0) - (this.scores[a.id] || 0));
               app.innerHTML = `
-                <div class="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-4">
-                  <div class="max-w-5xl mx-auto">
-                    <div class="text-center mb-6">
-                      <h1 class="text-4xl font-bold text-white mb-2 flex items-center justify-center gap-3">
-                        <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
-                        Competición Matemática
-                        <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                <div class="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-8">
+                  <div class="max-w-6xl mx-auto">
+                    <div class="text-center mb-8">
+                      <h1 class="text-6xl font-bold text-white mb-4">🏆 Clasificación 🏆</h1>
+                      <button onclick="if(confirm('¿Reiniciar puntuaciones?')){app.resetScores()}" 
+                        class="mt-4 bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-bold">
+                        Reiniciar Puntuaciones
+                      </button>
+                    </div>
+                    <div class="space-y-4">
+                      ${sorted.map((team, idx) => `
+                        <div class="${team.color} rounded-2xl p-6 shadow-2xl transform transition-all hover:scale-102">
+                          <div class="flex items-center justify-between text-white">
+                            <div class="flex items-center gap-4">
+                              <div class="text-4xl font-bold w-16">#${idx + 1}</div>
+                              <div>
+                                <h2 class="text-3xl font-bold">${team.name}</h2>
+                              </div>
+                            </div>
+                            <div class="text-5xl font-bold">${this.scores[team.id] || 0}</div>
+                          </div>
+                        </div>
+                      `).join('')}
+                    </div>
+                    <div class="text-center mt-8">
+                      <button onclick="app.view='select';app.render()" class="text-white text-xl hover:underline">
+                        ← Volver al menú
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }
+          }
+        }
+
+        let app;
+        window.addEventListener('DOMContentLoaded', () => {
+          app = new App();
+          window.app = app;
+        });
+    </script>
+</body>
+</html>
